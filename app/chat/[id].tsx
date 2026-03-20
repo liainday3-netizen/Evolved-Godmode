@@ -15,6 +15,7 @@ import {
   Platform,
   Animated,
   ActivityIndicator,
+  Dimensions,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,7 +26,10 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { fetch } from "expo/fetch";
 import { getApiUrl } from "@/lib/query-client";
 import Colors from "@/constants/colors";
+import { SacredGeometry } from "@/components/SacredGeometry";
 import type { GodMode, Conversation } from "@/app/index";
+
+const SCREEN_W = Dimensions.get("window").width;
 
 const STORAGE_KEY = "godmode_conversations";
 
@@ -327,9 +331,26 @@ export default function ChatScreen() {
   const reversedMessages = [...messages].reverse();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+  const geoSize = Math.min(SCREEN_W * 0.8, 300);
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
+      {/* Sacred geometry — centered behind chat */}
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          { alignItems: "center", justifyContent: "center" },
+        ]}
+        pointerEvents="none"
+      >
+        <SacredGeometry
+          size={geoSize}
+          accentColor={accentColor}
+          goldColor={Colors.accentGold}
+          opacity={0.22}
+        />
+      </View>
+
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>

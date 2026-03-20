@@ -8,6 +8,7 @@ import {
   Platform,
   Animated,
   Alert,
+  Dimensions,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,6 +16,9 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
+import { SacredGeometry } from "@/components/SacredGeometry";
+
+const SCREEN_W = Dimensions.get("window").width;
 
 const STORAGE_KEY = "godmode_conversations";
 
@@ -266,8 +270,32 @@ export default function HomeScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
+  const geoSize = Math.min(SCREEN_W * 0.88, 320);
+  const modeColors = Colors.modes[selectedMode];
+
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
+      {/* Sacred geometry background */}
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            alignItems: "center",
+            top: topPad - 30,
+            bottom: undefined,
+            height: geoSize + 60,
+            opacity: 0.55,
+          },
+        ]}
+        pointerEvents="none"
+      >
+        <SacredGeometry
+          size={geoSize}
+          accentColor={modeColors.color}
+          goldColor={Colors.accentGold}
+        />
+      </View>
+
       {/* Header */}
       <View style={styles.header}>
         <View>
