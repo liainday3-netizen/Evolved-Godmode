@@ -120,27 +120,29 @@ export default function Home() {
               GODMODE
             </div>
           </div>
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              backgroundColor: "rgba(0,212,255,0.1)",
-              border: "1px solid rgba(0,212,255,0.3)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              animation: "pulse-dot 2.5s ease-in-out infinite",
-            }}
-          >
-            <div
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                backgroundColor: Colors.accent,
-              }}
-            />
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              onClick={() => navigate("/codegen")}
+              style={{ background: "none", border: `1px solid ${Colors.border}`, color: Colors.textSecondary, cursor: "pointer", fontSize: 11, fontWeight: 600, padding: "6px 12px", borderRadius: 16, fontFamily: "inherit", letterSpacing: 0.5 }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = Colors.accent; (e.currentTarget as HTMLButtonElement).style.color = Colors.accent; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = Colors.border; (e.currentTarget as HTMLButtonElement).style.color = Colors.textSecondary; }}
+            >
+              &lt;/&gt; Code
+            </button>
+            <button
+              onClick={() => navigate("/community")}
+              style={{ background: "none", border: `1px solid ${Colors.border}`, color: Colors.textSecondary, cursor: "pointer", fontSize: 11, fontWeight: 600, padding: "6px 12px", borderRadius: 16, fontFamily: "inherit", letterSpacing: 0.5 }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#C084FC"; (e.currentTarget as HTMLButtonElement).style.color = "#C084FC"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = Colors.border; (e.currentTarget as HTMLButtonElement).style.color = Colors.textSecondary; }}
+            >
+              ◉ Hub
+            </button>
+            <button
+              onClick={() => navigate("/pricing")}
+              style={{ background: "rgba(0,212,255,0.08)", border: `1px solid ${Colors.accent}`, color: Colors.accent, cursor: "pointer", fontSize: 11, fontWeight: 700, padding: "6px 12px", borderRadius: 16, fontFamily: "inherit", letterSpacing: 0.5 }}
+            >
+              Pro ✦
+            </button>
           </div>
         </div>
 

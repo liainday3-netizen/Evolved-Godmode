@@ -8,6 +8,7 @@ import {
   type Message,
 } from "@/lib/storage";
 import { SacredGeometry } from "@/components/SacredGeometry";
+import { getUserId } from "@/lib/user";
 
 const MODES_META: Record<GodMode, { label: string; icon: string }> = {
   genius: { label: "Genius", icon: "⚡" },
@@ -34,6 +35,9 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [limitReached, setLimitReached] = useState(false);
+  const [shareState, setShareState] = useState<"idle" | "sharing" | "shared">("idle");
+  const userId = getUserId();
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -71,13 +75,17 @@ export default function Chat() {
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages,
-          mode,
-        }),
+        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        body: JSON.stringify({ messages: newMessages, mode }),
         signal: abortRef.current.signal,
       });
+
+      if (response.status === 402) {
+        setLimitReached(true);
+        setMessages(messages); // revert
+        setStreaming(false);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -171,6 +179,29 @@ export default function Chat() {
     ta.style.height = "auto";
     ta.style.height = `${Math.min(ta.scrollHeight, 140)}px`;
   };
+
+  const handleShare = useCallback(async () => {
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
+    const lastAiMsg = [...messages].reverse().find((m) => m.role === "assistant");
+    if (!lastUserMsg || !lastAiMsg) return;
+    setShareState("sharing");
+    try {
+      await fetch("/api/community", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          mode,
+          prompt: lastUserMsg.content,
+          response: lastAiMsg.content,
+        }),
+      });
+      setShareState("shared");
+      setTimeout(() => setShareState("idle"), 3000);
+    } catch {
+      setShareState("idle");
+    }
+  }, [messages, mode, userId]);
 
   const modeMeta = MODES_META[mode];
 
@@ -401,6 +432,31 @@ export default function Chat() {
         <div ref={bottomRef} />
       </div>
 
+      {/* Upgrade modal overlay */}
+      {limitReached && (
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.7)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ backgroundColor: Colors.bgCard, border: `1px solid ${Colors.accent}`, borderRadius: 20, padding: 32, maxWidth: 360, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>⚡</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: Colors.text, marginBottom: 8 }}>Daily Limit Reached</div>
+            <div style={{ fontSize: 14, color: Colors.textSecondary, lineHeight: 1.6, marginBottom: 24 }}>
+              You've used all 10 free messages today. Upgrade to Pro for unlimited AI access across all modes.
+            </div>
+            <button
+              onClick={() => navigate("/pricing")}
+              style={{ width: "100%", padding: "14px 20px", borderRadius: 12, border: "none", backgroundColor: Colors.accent, color: Colors.bg, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 }}
+            >
+              Upgrade to Pro →
+            </button>
+            <button
+              onClick={() => setLimitReached(false)}
+              style={{ width: "100%", padding: "10px 20px", borderRadius: 12, border: `1px solid ${Colors.border}`, backgroundColor: "transparent", color: Colors.textSecondary, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Input Bar */}
       <div
         style={{
@@ -451,22 +507,7 @@ export default function Chat() {
           {streaming ? (
             <button
               onClick={handleStop}
-              style={{
-                flexShrink: 0,
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                backgroundColor: Colors.error + "22",
-                border: `1px solid ${Colors.error}66`,
-                color: Colors.error,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 14,
-                fontFamily: "inherit",
-                transition: "background-color 0.15s",
-              }}
+              style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "50%", backgroundColor: Colors.error + "22", border: `1px solid ${Colors.error}66`, color: Colors.error, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontFamily: "inherit" }}
               title="Stop generating"
             >
               ■
@@ -475,37 +516,24 @@ export default function Chat() {
             <button
               onClick={sendMessage}
               disabled={!input.trim()}
-              style={{
-                flexShrink: 0,
-                width: 36,
-                height: 36,
-                borderRadius: "50%",
-                backgroundColor: input.trim() ? modeColors.color : Colors.border,
-                border: "none",
-                color: input.trim() ? Colors.bg : Colors.textMuted,
-                cursor: input.trim() ? "pointer" : "not-allowed",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 16,
-                fontFamily: "inherit",
-                transition: "background-color 0.15s, color 0.15s",
-              }}
+              style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "50%", backgroundColor: input.trim() ? modeColors.color : Colors.border, border: "none", color: input.trim() ? Colors.bg : Colors.textMuted, cursor: input.trim() ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontFamily: "inherit", transition: "background-color 0.15s, color 0.15s" }}
               title="Send"
             >
               ↑
             </button>
           )}
         </div>
-        <div
-          style={{
-            textAlign: "center",
-            marginTop: 8,
-            fontSize: 10,
-            color: Colors.textMuted,
-          }}
-        >
-          Enter to send · Shift+Enter for new line
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+          <span style={{ fontSize: 10, color: Colors.textMuted }}>Enter to send · Shift+Enter for new line</span>
+          {messages.some((m) => m.role === "assistant") && !streaming && (
+            <button
+              onClick={handleShare}
+              disabled={shareState === "sharing"}
+              style={{ background: "none", border: `1px solid ${shareState === "shared" ? "#00FFCC" : Colors.border}`, color: shareState === "shared" ? "#00FFCC" : Colors.textMuted, fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 16, cursor: shareState === "sharing" ? "wait" : "pointer", fontFamily: "inherit", transition: "all 0.15s" }}
+            >
+              {shareState === "shared" ? "✓ Shared!" : shareState === "sharing" ? "Sharing..." : "↗ Share"}
+            </button>
+          )}
         </div>
       </div>
     </div>
