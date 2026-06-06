@@ -3,8 +3,8 @@ import { useLocation } from "wouter";
 import Colors, { type GodMode } from "@/lib/colors";
 import {
   loadConversations,
-  saveConversations,
   deleteConversation,
+  upsertConversation,
   timeAgo,
   type Conversation,
 } from "@/lib/storage";
@@ -21,37 +21,52 @@ export default function Home() {
   const [, navigate] = useLocation();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedMode, setSelectedMode] = useState<GodMode>("genius");
+  const [loadError, setLoadError] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    setConversations(loadConversations());
+    setLoadError(false);
+    loadConversations()
+      .then(setConversations)
+      .catch(() => setLoadError(true));
   }, []);
 
   const modeColors = Colors.modes[selectedMode];
 
-  const createConversation = useCallback(() => {
-    const id = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const modeLabel = MODES.find((m) => m.id === selectedMode)?.label ?? "Genius";
-    const newConv: Conversation = {
-      id,
-      title: `${modeLabel} Session`,
-      lastMessage: "",
-      mode: selectedMode,
-      timestamp: Date.now(),
-      messageCount: 0,
-      messages: [],
-    };
-    const all = loadConversations();
-    const updated = [newConv, ...all];
-    saveConversations(updated);
-    setConversations(updated);
-    navigate(`/chat/${id}?mode=${selectedMode}`);
-  }, [selectedMode, navigate]);
+  const createConversation = useCallback(async () => {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const id = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const modeLabel = MODES.find((m) => m.id === selectedMode)?.label ?? "Genius";
+      const newConv: Conversation = {
+        id,
+        title: `${modeLabel} Session`,
+        lastMessage: "",
+        mode: selectedMode,
+        timestamp: Date.now(),
+        messageCount: 0,
+        messages: [],
+      };
+      await upsertConversation(newConv);
+      setConversations((prev) => [newConv, ...prev]);
+      navigate(`/chat/${id}?mode=${selectedMode}`);
+    } catch {
+      alert("Could not create session. Please check your connection and try again.");
+    } finally {
+      setCreating(false);
+    }
+  }, [selectedMode, navigate, creating]);
 
-  const handleDelete = useCallback((id: string, e: React.MouseEvent) => {
+  const handleDelete = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm("Remove this conversation from history?")) return;
-    deleteConversation(id);
-    setConversations((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await deleteConversation(id);
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+    } catch {
+      alert("Could not delete session. Please try again.");
+    }
   }, []);
 
   return (
@@ -205,7 +220,8 @@ export default function Home() {
         {/* New Session Button */}
         <div style={{ padding: "0 24px 24px" }}>
           <button
-            onClick={createConversation}
+            onClick={() => { void createConversation(); }}
+            disabled={creating}
             style={{
               width: "100%",
               display: "flex",
@@ -214,31 +230,31 @@ export default function Home() {
               gap: 8,
               padding: "16px 24px",
               borderRadius: 14,
-              backgroundColor: Colors.accent,
+              backgroundColor: creating ? Colors.border : Colors.accent,
               border: "none",
-              color: Colors.bg,
+              color: creating ? Colors.textMuted : Colors.bg,
               fontSize: 15,
               fontWeight: 700,
-              cursor: "pointer",
+              cursor: creating ? "not-allowed" : "pointer",
               letterSpacing: 0.3,
               transition: "opacity 0.15s, transform 0.1s",
               fontFamily: "inherit",
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.opacity = "0.88";
+              if (!creating) (e.currentTarget as HTMLButtonElement).style.opacity = "0.88";
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLButtonElement).style.opacity = "1";
             }}
             onMouseDown={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.98)";
+              if (!creating) (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.98)";
             }}
             onMouseUp={(e) => {
               (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
             }}
           >
-            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
-            New Session
+            <span style={{ fontSize: 18, lineHeight: 1 }}>{creating ? "…" : "+"}</span>
+            {creating ? "Creating…" : "New Session"}
           </button>
         </div>
 
@@ -270,7 +286,26 @@ export default function Home() {
             )}
           </div>
 
-          {conversations.length === 0 ? (
+          {loadError ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "60px 24px",
+                gap: 12,
+              }}
+            >
+              <span style={{ fontSize: 32, opacity: 0.5 }}>⚠</span>
+              <div style={{ fontSize: 16, fontWeight: 600, color: Colors.error }}>
+                Could not load sessions
+              </div>
+              <div style={{ fontSize: 13, color: Colors.textMuted, textAlign: "center", maxWidth: 260 }}>
+                Check your connection and refresh the page.
+              </div>
+            </div>
+          ) : conversations.length === 0 ? (
             <div
               style={{
                 display: "flex",
@@ -434,7 +469,7 @@ export default function Home() {
 
                     {/* Delete button */}
                     <button
-                      onClick={(e) => handleDelete(conv.id, e)}
+                      onClick={(e) => { void handleDelete(conv.id, e); }}
                       style={{
                         background: "none",
                         border: "none",

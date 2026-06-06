@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: chat
     description: Chat operations
+  - name: conversations
+    description: Conversation history operations
 paths:
   /healthz:
     get:
@@ -45,6 +47,112 @@ paths:
             text/event-stream:
               schema:
                 type: string
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List all conversations
+      description: Returns all conversations ordered by most recent first
+      responses:
+        "200":
+          description: List of conversations (without messages)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ConversationSummary"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /conversations/{id}:
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      summary: Get a conversation with its messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: upsertConversation
+      tags: [conversations]
+      summary: Create or update a conversation
+      description: Creates the conversation if it does not exist, otherwise updates it. Messages are replaced wholesale.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Conversation"
+      responses:
+        "200":
+          description: Upserted conversation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteConversation
+      tags: [conversations]
+      summary: Delete a conversation and all its messages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
         "500":
           description: Server error
           content:
@@ -88,3 +196,52 @@ components:
           type: string
       required:
         - error
+    ConversationSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        lastMessage:
+          type: string
+        mode:
+          type: string
+        timestamp:
+          type: number
+        messageCount:
+          type: integer
+      required:
+        - id
+        - title
+        - lastMessage
+        - mode
+        - timestamp
+        - messageCount
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        lastMessage:
+          type: string
+        mode:
+          type: string
+        timestamp:
+          type: number
+        messageCount:
+          type: integer
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+      required:
+        - id
+        - title
+        - lastMessage
+        - mode
+        - timestamp
+        - messageCount
+        - messages

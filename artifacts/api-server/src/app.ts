@@ -2,8 +2,16 @@ import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { WebhookHandlers } from "./webhookHandlers";
+import session from "express-session";
+import { randomUUID } from "crypto";
 import router from "./routes";
 import { logger } from "./lib/logger";
+
+declare module "express-session" {
+  interface SessionData {
+    clientId: string;
+  }
+}
 
 const app: Express = express();
 
@@ -21,7 +29,7 @@ app.use(
   }),
 );
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 
 // Stripe webhook MUST be registered before express.json() — needs raw Buffer body
 app.post(
@@ -46,6 +54,28 @@ app.post(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+const sessionSecret = process.env["SESSION_SECRET"] ?? randomUUID();
+
+app.use(
+  session({
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: true,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+    },
+  }),
+);
+
+app.use((req, _res, next) => {
+  if (!req.session.clientId) {
+    req.session.clientId = randomUUID();
+  }
+  next();
+});
 
 app.use("/api", router);
 

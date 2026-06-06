@@ -15,41 +15,53 @@ export interface Conversation {
   messages: Message[];
 }
 
-const STORAGE_KEY = "godmode_conversations";
+const BASE = "/api";
 
-export function loadConversations(): Conversation[] {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) return JSON.parse(data) as Conversation[];
-  } catch {}
-  return [];
+async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    credentials: "include",
+  });
+  return res;
 }
 
-export function saveConversations(conversations: Conversation[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
-  } catch {}
+export async function loadConversations(): Promise<Conversation[]> {
+  const res = await apiRequest("/conversations");
+  if (!res.ok) throw new Error(`Failed to load conversations: ${res.status}`);
+  const data = (await res.json()) as Omit<Conversation, "messages">[];
+  return data.map((c) => ({ ...c, messages: [] }));
 }
 
-export function loadConversation(id: string): Conversation | null {
-  const all = loadConversations();
-  return all.find((c) => c.id === id) ?? null;
+export async function loadConversation(id: string): Promise<Conversation | null> {
+  const res = await apiRequest(`/conversations/${encodeURIComponent(id)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Failed to load conversation: ${res.status}`);
+  return (await res.json()) as Conversation;
 }
 
-export function upsertConversation(conv: Conversation): void {
-  const all = loadConversations();
-  const idx = all.findIndex((c) => c.id === conv.id);
-  if (idx >= 0) {
-    all[idx] = conv;
-  } else {
-    all.unshift(conv);
-  }
-  saveConversations(all);
+export async function upsertConversation(conv: Conversation): Promise<void> {
+  const res = await apiRequest(`/conversations/${encodeURIComponent(conv.id)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(conv),
+  });
+  if (!res.ok) throw new Error(`Failed to save conversation: ${res.status}`);
 }
 
-export function deleteConversation(id: string): void {
-  const all = loadConversations().filter((c) => c.id !== id);
-  saveConversations(all);
+export async function createConversation(conv: Conversation): Promise<void> {
+  const res = await apiRequest("/conversations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(conv),
+  });
+  if (!res.ok) throw new Error(`Failed to create conversation: ${res.status}`);
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  const res = await apiRequest(`/conversations/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 204) throw new Error(`Failed to delete conversation: ${res.status}`);
 }
 
 export function timeAgo(timestamp: number): string {

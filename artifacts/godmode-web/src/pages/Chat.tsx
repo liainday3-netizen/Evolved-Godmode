@@ -37,6 +37,7 @@ export default function Chat() {
   const [streamingContent, setStreamingContent] = useState("");
   const [limitReached, setLimitReached] = useState(false);
   const [shareState, setShareState] = useState<"idle" | "sharing" | "shared">("idle");
+  const [saveError, setSaveError] = useState(false);
   const userId = getUserId();
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -45,12 +46,15 @@ export default function Chat() {
 
   useEffect(() => {
     if (!id) return;
-    const existing = loadConversation(id);
-    if (existing) {
-      setConv(existing);
-      setMessages(existing.messages || []);
-      setMode(existing.mode);
-    }
+    loadConversation(id)
+      .then((existing) => {
+        if (existing) {
+          setConv(existing);
+          setMessages(existing.messages || []);
+          setMode(existing.mode);
+        }
+      })
+      .catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -69,6 +73,7 @@ export default function Chat() {
     setInput("");
     setStreaming(true);
     setStreamingContent("");
+    setSaveError(false);
 
     abortRef.current = new AbortController();
 
@@ -132,7 +137,6 @@ export default function Chat() {
       setMessages(finalMessages);
       setStreamingContent("");
 
-      // Persist
       const updatedConv: Conversation = {
         id: id!,
         title: conv?.title ?? "Session",
@@ -143,7 +147,12 @@ export default function Chat() {
         messages: finalMessages,
       };
       setConv(updatedConv);
-      upsertConversation(updatedConv);
+
+      try {
+        await upsertConversation(updatedConv);
+      } catch {
+        setSaveError(true);
+      }
     } catch (err) {
       if ((err as Error).name === "AbortError") {
         // user cancelled — ignore
@@ -160,12 +169,12 @@ export default function Chat() {
       abortRef.current = null;
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [input, messages, mode, streaming, id, conv]);
+  }, [input, messages, mode, streaming, id, conv, userId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      void sendMessage();
     }
   };
 
@@ -316,6 +325,24 @@ export default function Chat() {
         <div style={{ width: 48 }} />
       </div>
 
+      {/* Save error banner */}
+      {saveError && (
+        <div
+          style={{
+            position: "relative",
+            zIndex: 2,
+            padding: "8px 16px",
+            backgroundColor: Colors.error + "22",
+            borderBottom: `1px solid ${Colors.error}44`,
+            fontSize: 12,
+            color: Colors.error,
+            textAlign: "center",
+          }}
+        >
+          ⚠ Message was not saved to history — check your connection
+        </div>
+      )}
+
       {/* Messages */}
       <div
         style={{
@@ -401,27 +428,6 @@ export default function Chat() {
                     opacity: 0.6,
                     animation: `sgPulse 1.2s ease-in-out infinite`,
                     animationDelay: `${i * 0.2}s`,
-                  }}
-                />
-              ))}
-              <style>{`
-                @keyframes typingDot {
-                  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-                  40% { opacity: 1; transform: scale(1); }
-                }
-              `}</style>
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={`td${i}`}
-                  style={{
-                    position: "absolute",
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    backgroundColor: modeColors.color,
-                    animation: `typingDot 1.2s ease-in-out infinite`,
-                    animationDelay: `${i * 0.2}s`,
-                    display: "none",
                   }}
                 />
               ))}
@@ -514,7 +520,7 @@ export default function Chat() {
             </button>
           ) : (
             <button
-              onClick={sendMessage}
+              onClick={() => { void sendMessage(); }}
               disabled={!input.trim()}
               style={{ flexShrink: 0, width: 36, height: 36, borderRadius: "50%", backgroundColor: input.trim() ? modeColors.color : Colors.border, border: "none", color: input.trim() ? Colors.bg : Colors.textMuted, cursor: input.trim() ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontFamily: "inherit", transition: "background-color 0.15s, color 0.15s" }}
               title="Send"
