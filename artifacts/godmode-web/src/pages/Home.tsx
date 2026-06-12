@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import Colors, { type GodMode } from "@/lib/colors";
 import {
   loadConversations,
+  createConversation,
   deleteConversation,
-  upsertConversation,
   timeAgo,
   type Conversation,
 } from "@/lib/storage";
@@ -17,56 +17,129 @@ const MODES: { id: GodMode; label: string; desc: string; icon: string }[] = [
   { id: "oracle", label: "Oracle", desc: "Visionary wisdom", icon: "◉" },
 ];
 
+function AmbientParticles({ accentColor }: { accentColor: string }) {
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 22 }, (_, i) => ({
+        id: i,
+        left: `${(i * 17 + i * i * 3 + 5) % 95}%`,
+        top: `${(i * 23 + i * 7 + 3) % 90}%`,
+        size: i % 4 === 0 ? 2.5 : 1.5,
+        isGold: i % 5 === 0,
+        delay: `${(i * 0.37) % 4}s`,
+        duration: `${2.5 + (i % 4) * 0.8}s`,
+      })),
+    []
+  );
+
+  return (
+    <>
+      <style>{`
+        @keyframes twinkle { 0%,100%{opacity:0.06} 50%{opacity:0.4} }
+        @keyframes floatUp { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+      `}</style>
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          style={{
+            position: "absolute",
+            left: p.left,
+            top: p.top,
+            width: p.size,
+            height: p.size,
+            borderRadius: "50%",
+            backgroundColor: p.isGold ? Colors.accentGold : accentColor,
+            pointerEvents: "none",
+            animation: `twinkle ${p.duration} ease-in-out infinite, floatUp ${parseFloat(p.duration) * 1.8}s ease-in-out infinite`,
+            animationDelay: p.delay,
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+function NavBtn({
+  label,
+  color,
+  onClick,
+}: {
+  label: string;
+  color: string;
+  onClick: () => void;
+}) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: hov ? `${color}12` : "none",
+        border: `1px solid ${hov ? color : Colors.border}`,
+        color: hov ? color : Colors.textSecondary,
+        cursor: "pointer",
+        fontSize: 11,
+        fontWeight: 600,
+        padding: "6px 12px",
+        borderRadius: 16,
+        fontFamily: "inherit",
+        letterSpacing: 0.5,
+        transition: "all 0.15s",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function Home() {
   const [, navigate] = useLocation();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedMode, setSelectedMode] = useState<GodMode>("genius");
-  const [loadError, setLoadError] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-
-  useEffect(() => {
-    setLoadError(false);
-    loadConversations()
-      .then(setConversations)
-      .catch(() => setLoadError(true));
-  }, []);
+  const [hoveredMode, setHoveredMode] = useState<GodMode | null>(null);
+  const [hoveredConv, setHoveredConv] = useState<string | null>(null);
 
   const modeColors = Colors.modes[selectedMode];
 
-  const createConversation = useCallback(async () => {
+  useEffect(() => {
+    setLoading(true);
+    void loadConversations()
+      .then((convs) => setConversations(convs))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleCreate = useCallback(async () => {
     if (creating) return;
     setCreating(true);
+    const id = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const modeLabel = MODES.find((m) => m.id === selectedMode)?.label ?? "Genius";
+    const newConv: Conversation = {
+      id,
+      title: `${modeLabel} Session`,
+      lastMessage: "",
+      mode: selectedMode,
+      timestamp: Date.now(),
+      messageCount: 0,
+      messages: [],
+    };
     try {
-      const id = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const modeLabel = MODES.find((m) => m.id === selectedMode)?.label ?? "Genius";
-      const newConv: Conversation = {
-        id,
-        title: `${modeLabel} Session`,
-        lastMessage: "",
-        mode: selectedMode,
-        timestamp: Date.now(),
-        messageCount: 0,
-        messages: [],
-      };
-      await upsertConversation(newConv);
-      setConversations((prev) => [newConv, ...prev]);
-      navigate(`/chat/${id}?mode=${selectedMode}`);
-    } catch {
-      alert("Could not create session. Please check your connection and try again.");
-    } finally {
-      setCreating(false);
-    }
+      await createConversation(newConv);
+    } catch {}
+    navigate(`/chat/${id}?mode=${selectedMode}`);
   }, [selectedMode, navigate, creating]);
 
   const handleDelete = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm("Remove this conversation from history?")) return;
+    if (!window.confirm("Remove this conversation?")) return;
+    setConversations((prev) => prev.filter((c) => c.id !== id));
     try {
       await deleteConversation(id);
-      setConversations((prev) => prev.filter((c) => c.id !== id));
-    } catch {
-      alert("Could not delete session. Please try again.");
-    }
+    } catch {}
   }, []);
 
   return (
@@ -80,27 +153,47 @@ export default function Home() {
         overflow: "hidden",
       }}
     >
-      {/* Sacred Geometry Background */}
+      {/* Ambient particles */}
       <div
         style={{
           position: "fixed",
-          top: -20,
+          inset: 0,
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      >
+        <AmbientParticles accentColor={modeColors.color} />
+      </div>
+
+      {/* Sacred Geometry */}
+      <div
+        style={{
+          position: "fixed",
+          top: -30,
           left: "50%",
           transform: "translateX(-50%)",
-          opacity: 0.5,
+          opacity: 0.42,
           pointerEvents: "none",
           zIndex: 0,
         }}
       >
         <SacredGeometry
-          size={340}
+          size={360}
           accentColor={modeColors.color}
           goldColor={Colors.accentGold}
           opacity={1}
         />
       </div>
 
-      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1 }}>
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+        }}
+      >
         {/* Header */}
         <div
           style={{
@@ -126,7 +219,7 @@ export default function Home() {
             <div
               style={{
                 fontSize: 36,
-                fontWeight: 700,
+                fontWeight: 800,
                 color: Colors.text,
                 letterSpacing: -1,
                 lineHeight: 1,
@@ -135,26 +228,45 @@ export default function Home() {
               GODMODE
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <NavBtn
+              label="</> Code"
+              color={Colors.accentElectric}
               onClick={() => navigate("/codegen")}
-              style={{ background: "none", border: `1px solid ${Colors.border}`, color: Colors.textSecondary, cursor: "pointer", fontSize: 11, fontWeight: 600, padding: "6px 12px", borderRadius: 16, fontFamily: "inherit", letterSpacing: 0.5 }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = Colors.accent; (e.currentTarget as HTMLButtonElement).style.color = Colors.accent; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = Colors.border; (e.currentTarget as HTMLButtonElement).style.color = Colors.textSecondary; }}
-            >
-              &lt;/&gt; Code
-            </button>
-            <button
+            />
+            <NavBtn
+              label="◉ Hub"
+              color="#C084FC"
               onClick={() => navigate("/community")}
-              style={{ background: "none", border: `1px solid ${Colors.border}`, color: Colors.textSecondary, cursor: "pointer", fontSize: 11, fontWeight: 600, padding: "6px 12px", borderRadius: 16, fontFamily: "inherit", letterSpacing: 0.5 }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#C084FC"; (e.currentTarget as HTMLButtonElement).style.color = "#C084FC"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = Colors.border; (e.currentTarget as HTMLButtonElement).style.color = Colors.textSecondary; }}
-            >
-              ◉ Hub
-            </button>
+            />
+            <NavBtn
+              label="⊕ Bot"
+              color={Colors.accentGold}
+              onClick={() => navigate("/trading")}
+            />
             <button
               onClick={() => navigate("/pricing")}
-              style={{ background: "rgba(0,212,255,0.08)", border: `1px solid ${Colors.accent}`, color: Colors.accent, cursor: "pointer", fontSize: 11, fontWeight: 700, padding: "6px 12px", borderRadius: 16, fontFamily: "inherit", letterSpacing: 0.5 }}
+              style={{
+                background: "rgba(0,212,255,0.1)",
+                border: `1px solid ${Colors.accent}`,
+                color: Colors.accent,
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 700,
+                padding: "6px 14px",
+                borderRadius: 16,
+                fontFamily: "inherit",
+                letterSpacing: 0.5,
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(0,212,255,0.18)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background =
+                  "rgba(0,212,255,0.1)";
+              }}
             >
               Pro ✦
             </button>
@@ -179,24 +291,36 @@ export default function Home() {
             {MODES.map((mode) => {
               const mc = Colors.modes[mode.id];
               const isSelected = selectedMode === mode.id;
+              const isHov = hoveredMode === mode.id;
               return (
                 <button
                   key={mode.id}
                   onClick={() => setSelectedMode(mode.id)}
+                  onMouseEnter={() => setHoveredMode(mode.id)}
+                  onMouseLeave={() => setHoveredMode(null)}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
-                    padding: "7px 14px",
-                    borderRadius: 20,
-                    backgroundColor: isSelected ? mc.bg : Colors.bgCard,
-                    border: `1px solid ${isSelected ? mc.color : Colors.border}`,
-                    color: isSelected ? mc.color : Colors.textMuted,
+                    padding: "8px 16px",
+                    borderRadius: 22,
+                    backgroundColor: isSelected
+                      ? mc.bg
+                      : isHov
+                        ? `${mc.bg}88`
+                        : Colors.bgCard,
+                    border: `1px solid ${isSelected ? mc.color : isHov ? `${mc.color}55` : Colors.border}`,
+                    color: isSelected
+                      ? mc.color
+                      : isHov
+                        ? `${mc.color}bb`
+                        : Colors.textMuted,
                     fontSize: 12,
                     fontWeight: 600,
                     cursor: "pointer",
-                    transition: "all 0.15s ease",
+                    transition: "all 0.18s ease",
                     fontFamily: "inherit",
+                    boxShadow: isSelected ? `0 0 18px ${mc.color}20` : "none",
                   }}
                 >
                   <span style={{ fontSize: 11 }}>{mode.icon}</span>
@@ -220,7 +344,9 @@ export default function Home() {
         {/* New Session Button */}
         <div style={{ padding: "0 24px 24px" }}>
           <button
-            onClick={() => { void createConversation(); }}
+            onClick={() => {
+              void handleCreate();
+            }}
             disabled={creating}
             style={{
               width: "100%",
@@ -230,31 +356,43 @@ export default function Home() {
               gap: 8,
               padding: "16px 24px",
               borderRadius: 14,
-              backgroundColor: creating ? Colors.border : Colors.accent,
+              background: `linear-gradient(135deg, ${modeColors.color} 0%, ${modeColors.color}cc 100%)`,
               border: "none",
-              color: creating ? Colors.textMuted : Colors.bg,
+              color: Colors.bg,
               fontSize: 15,
               fontWeight: 700,
               cursor: creating ? "not-allowed" : "pointer",
               letterSpacing: 0.3,
-              transition: "opacity 0.15s, transform 0.1s",
+              transition: "opacity 0.15s, transform 0.1s, box-shadow 0.15s",
               fontFamily: "inherit",
+              boxShadow: `0 4px 24px ${modeColors.color}30`,
+              opacity: creating ? 0.7 : 1,
             }}
             onMouseEnter={(e) => {
-              if (!creating) (e.currentTarget as HTMLButtonElement).style.opacity = "0.88";
+              if (!creating) {
+                (e.currentTarget as HTMLButtonElement).style.opacity = "0.88";
+                (
+                  e.currentTarget as HTMLButtonElement
+                ).style.boxShadow = `0 6px 32px ${modeColors.color}50`;
+              }
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+              (
+                e.currentTarget as HTMLButtonElement
+              ).style.boxShadow = `0 4px 24px ${modeColors.color}30`;
             }}
             onMouseDown={(e) => {
-              if (!creating) (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.98)";
+              (e.currentTarget as HTMLButtonElement).style.transform =
+                "scale(0.98)";
             }}
             onMouseUp={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
+              (e.currentTarget as HTMLButtonElement).style.transform =
+                "scale(1)";
             }}
           >
-            <span style={{ fontSize: 18, lineHeight: 1 }}>{creating ? "…" : "+"}</span>
-            {creating ? "Creating…" : "New Session"}
+            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
+            {creating ? "Starting..." : "New Session"}
           </button>
         </div>
 
@@ -286,24 +424,18 @@ export default function Home() {
             )}
           </div>
 
-          {loadError ? (
+          {loading ? (
             <div
               style={{
                 display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
                 justifyContent: "center",
-                padding: "60px 24px",
-                gap: 12,
+                padding: "40px 24px",
+                opacity: 0.4,
               }}
             >
-              <span style={{ fontSize: 32, opacity: 0.5 }}>⚠</span>
-              <div style={{ fontSize: 16, fontWeight: 600, color: Colors.error }}>
-                Could not load sessions
-              </div>
-              <div style={{ fontSize: 13, color: Colors.textMuted, textAlign: "center", maxWidth: 260 }}>
-                Check your connection and refresh the page.
-              </div>
+              <span style={{ fontSize: 13, color: Colors.textMuted }}>
+                Loading...
+              </span>
             </div>
           ) : conversations.length === 0 ? (
             <div
@@ -316,10 +448,12 @@ export default function Home() {
                 gap: 12,
               }}
             >
-              <span style={{ fontSize: 48, opacity: 0.3 }}>⚡</span>
+              <span style={{ fontSize: 48, opacity: 0.22 }}>
+                {MODES.find((m) => m.id === selectedMode)?.icon}
+              </span>
               <div
                 style={{
-                  fontSize: 18,
+                  fontSize: 17,
                   fontWeight: 600,
                   color: Colors.textSecondary,
                 }}
@@ -328,14 +462,14 @@ export default function Home() {
               </div>
               <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   color: Colors.textMuted,
                   textAlign: "center",
                   maxWidth: 260,
-                  lineHeight: 1.5,
+                  lineHeight: 1.6,
                 }}
               >
-                Choose a mode and start a new session
+                Choose a mode and start your first session
               </div>
             </div>
           ) : (
@@ -348,38 +482,30 @@ export default function Home() {
               }}
             >
               {conversations.map((conv) => {
-                const mc = Colors.modes[conv.mode];
+                const mc =
+                  Colors.modes[conv.mode as GodMode] ?? Colors.modes.genius;
+                const isHov = hoveredConv === conv.id;
                 return (
                   <div
                     key={conv.id}
                     onClick={() =>
                       navigate(`/chat/${conv.id}?mode=${conv.mode}`)
                     }
+                    onMouseEnter={() => setHoveredConv(conv.id)}
+                    onMouseLeave={() => setHoveredConv(null)}
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      backgroundColor: Colors.bgCard,
+                      backgroundColor: isHov ? Colors.bgElevated : Colors.bgCard,
                       borderRadius: 14,
-                      border: `1px solid ${Colors.border}`,
+                      border: `1px solid ${isHov ? mc.color + "44" : Colors.border}`,
                       padding: 16,
                       gap: 12,
                       cursor: "pointer",
-                      transition: "border-color 0.15s, background-color 0.15s",
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLDivElement).style.borderColor =
-                        Colors.borderBright;
-                      (e.currentTarget as HTMLDivElement).style.backgroundColor =
-                        Colors.bgElevated;
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLDivElement).style.borderColor =
-                        Colors.border;
-                      (e.currentTarget as HTMLDivElement).style.backgroundColor =
-                        Colors.bgCard;
+                      transition: "all 0.18s ease",
+                      boxShadow: isHov ? `0 2px 18px ${mc.color}0e` : "none",
                     }}
                   >
-                    {/* Mode dot */}
                     <div
                       style={{
                         width: 8,
@@ -387,10 +513,10 @@ export default function Home() {
                         borderRadius: "50%",
                         backgroundColor: mc.color,
                         flexShrink: 0,
+                        boxShadow: isHov ? `0 0 8px ${mc.color}` : "none",
+                        transition: "box-shadow 0.18s",
                       }}
                     />
-
-                    {/* Content */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
@@ -448,7 +574,7 @@ export default function Home() {
                             display: "inline-flex",
                             alignItems: "center",
                             gap: 4,
-                            padding: "2px 6px",
+                            padding: "2px 7px",
                             borderRadius: 6,
                             backgroundColor: mc.bg,
                             fontSize: 9,
@@ -462,14 +588,14 @@ export default function Home() {
                         </span>
                         <span style={{ fontSize: 11, color: Colors.textMuted }}>
                           {conv.messageCount}{" "}
-                          {conv.messageCount === 1 ? "message" : "messages"}
+                          {conv.messageCount === 1 ? "msg" : "msgs"}
                         </span>
                       </div>
                     </div>
-
-                    {/* Delete button */}
                     <button
-                      onClick={(e) => { void handleDelete(conv.id, e); }}
+                      onClick={(e) => {
+                        void handleDelete(conv.id, e);
+                      }}
                       style={{
                         background: "none",
                         border: "none",
@@ -477,7 +603,7 @@ export default function Home() {
                         cursor: "pointer",
                         padding: "4px 8px",
                         borderRadius: 6,
-                        fontSize: 16,
+                        fontSize: 18,
                         flexShrink: 0,
                         transition: "color 0.15s",
                       }}
@@ -489,7 +615,6 @@ export default function Home() {
                         (e.currentTarget as HTMLButtonElement).style.color =
                           Colors.textMuted;
                       }}
-                      title="Delete conversation"
                     >
                       ×
                     </button>

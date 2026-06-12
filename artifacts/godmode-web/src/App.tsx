@@ -4,6 +4,7 @@ import Chat from "@/pages/Chat";
 import Pricing from "@/pages/Pricing";
 import Community from "@/pages/Community";
 import CodeGen from "@/pages/CodeGen";
+import TradingBot from "@/pages/TradingBot";
 
 function Router() {
   return (
@@ -13,6 +14,7 @@ function Router() {
       <Route path="/pricing" component={Pricing} />
       <Route path="/community" component={Community} />
       <Route path="/codegen" component={CodeGen} />
+      <Route path="/trading" component={TradingBot} />
       <Route>
         <Home />
       </Route>

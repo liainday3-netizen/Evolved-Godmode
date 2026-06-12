@@ -39,7 +39,7 @@ export async function batchProcess<T, R>(
             return result;
           } catch (error: unknown) {
             if (isRateLimitError(error)) throw error;
-            throw new pRetry.AbortError(error instanceof Error ? error : new Error(String(error)));
+            throw new (pRetry as unknown as { AbortError: new (e: Error) => Error }).AbortError(error instanceof Error ? error : new Error(String(error)));
           }
         },
         { retries, minTimeout, maxTimeout, factor: 2 }
@@ -71,7 +71,7 @@ export async function batchProcessWithSSE<T, R>(
         maxTimeout,
         factor: 2,
         onFailedAttempt: (error) => {
-          if (!isRateLimitError(error)) throw new pRetry.AbortError(error instanceof Error ? error : new Error(String(error)));
+          if (!isRateLimitError(error)) throw new (pRetry as unknown as { AbortError: new (e: Error) => Error }).AbortError(error instanceof Error ? error : new Error(String(error)));
         },
       });
       results.push(result);

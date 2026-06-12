@@ -5,6 +5,7 @@ import codegenRouter from "./codegen";
 import stripeRouter from "./stripe";
 import communityRouter from "./community";
 import conversationsRouter from "./conversations";
+import tradingRouter from "./trading";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(codegenRouter);
 router.use(stripeRouter);
 router.use(communityRouter);
 router.use(conversationsRouter);
+router.use(tradingRouter);
 
 export default router;
