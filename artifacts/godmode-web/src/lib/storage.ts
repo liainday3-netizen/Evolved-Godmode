@@ -1,4 +1,5 @@
 import type { GodMode } from "./colors";
+import { getUserId } from "./user";
 
 export interface Message {
   role: "user" | "assistant";
@@ -16,13 +17,40 @@ export interface Conversation {
 }
 
 const BASE = "/api";
+const LEGACY_CONV_KEY = "godmode_conversations";
+const MIGRATION_DONE_KEY = "godmode_migration_v2_done";
 
 async function apiRequest(path: string, init?: RequestInit): Promise<Response> {
+  const headers: Record<string, string> = {
+    "x-user-id": getUserId(),
+    ...((init?.headers as Record<string, string>) ?? {}),
+  };
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     credentials: "include",
+    headers,
   });
   return res;
+}
+
+export async function migrateLocalStorageIfNeeded(): Promise<void> {
+  if (typeof window === "undefined") return;
+  if (localStorage.getItem(MIGRATION_DONE_KEY)) return;
+
+  try {
+    const raw = localStorage.getItem(LEGACY_CONV_KEY);
+    if (raw) {
+      const old = JSON.parse(raw) as Conversation[];
+      for (const conv of old) {
+        await createConversation(conv).catch(() => {});
+      }
+      localStorage.removeItem(LEGACY_CONV_KEY);
+    }
+  } catch {
+    // best-effort; never block the app
+  } finally {
+    localStorage.setItem(MIGRATION_DONE_KEY, "1");
+  }
 }
 
 export async function loadConversations(): Promise<Conversation[]> {

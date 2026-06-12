@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import Colors, { type GodMode } from "@/lib/colors";
 import {
   loadConversations,
+  migrateLocalStorageIfNeeded,
   createConversation,
   deleteConversation,
   timeAgo,
@@ -107,7 +108,9 @@ export default function Home() {
 
   useEffect(() => {
     setLoading(true);
-    void loadConversations()
+    void migrateLocalStorageIfNeeded()
+      .catch(() => {})
+      .then(() => loadConversations())
       .then((convs) => setConversations(convs))
       .catch(() => {})
       .finally(() => setLoading(false));
