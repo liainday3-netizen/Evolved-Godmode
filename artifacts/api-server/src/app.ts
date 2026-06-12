@@ -6,6 +6,7 @@ import session from "express-session";
 import { randomUUID } from "crypto";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { registerImageRoutes } from "./replit_integrations/image";
 
 declare module "express-session" {
   interface SessionData {
@@ -78,5 +79,6 @@ app.use((req, _res, next) => {
 });
 
 app.use("/api", router);
+registerImageRoutes(app);
 
 export default app;

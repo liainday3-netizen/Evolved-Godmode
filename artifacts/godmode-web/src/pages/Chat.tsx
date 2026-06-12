@@ -113,6 +113,14 @@ function MessageBubble({
             th({ children }) { return <th style={{ border: `1px solid ${Colors.border}`, padding: "7px 12px", textAlign: "left", background: Colors.bgElevated, color: Colors.text, fontWeight: 700 }}>{children}</th>; },
             td({ children }) { return <td style={{ border: `1px solid ${Colors.border}`, padding: "7px 12px", color: Colors.textSecondary }}>{children}</td>; },
             hr() { return <hr style={{ border: "none", borderTop: `1px solid ${Colors.border}`, margin: "12px 0" }} />; },
+            img({ src, alt }) {
+              return (
+                <div style={{ margin: "8px 0", borderRadius: 12, overflow: "hidden", border: `1px solid ${Colors.border}`, maxWidth: 420, display: "inline-block", width: "100%" }}>
+                  <img src={src ?? ""} alt={alt ?? ""} style={{ display: "block", width: "100%", height: "auto" }} loading="lazy" />
+                  {alt && <div style={{ padding: "7px 12px", background: Colors.bgElevated, fontSize: 11, color: Colors.textMuted, lineHeight: 1.4 }}>🎨 {alt}</div>}
+                </div>
+              );
+            },
           }}
         >
           {message.content}
@@ -144,6 +152,7 @@ export default function Chat() {
   const [hasVoice, setHasVoice] = useState(false);
   const [retryMsg, setRetryMsg] = useState<Message[] | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [isImageGenerating, setIsImageGenerating] = useState(false);
   const userId = getUserId();
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -182,6 +191,51 @@ export default function Chat() {
   const sendMessage = useCallback(async (overrideMessages?: Message[]) => {
     const text = input.trim();
     if (!text || streaming) return;
+
+    // /imagine command → inline image generation
+    const imagineMatch = text.match(/^\/imagine\s+(.+)/i);
+    if (imagineMatch) {
+      const prompt = imagineMatch[1].trim();
+      const imgBase = overrideMessages ?? messages;
+      const userMsg: Message = { role: "user", content: `🎨 ${prompt}` };
+      const withUser = [...imgBase, userMsg];
+      setMessages(withUser);
+      setInput("");
+      setStreaming(true);
+      setIsImageGenerating(true);
+      try {
+        const res = await fetch("/api/generate-image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, size: "1024x1024" }),
+        });
+        if (!res.ok) throw new Error("Failed");
+        const data = await res.json() as { url?: string; b64_json?: string };
+        const imgSrc = data.url ?? (data.b64_json ? `data:image/png;base64,${data.b64_json}` : null);
+        if (!imgSrc) throw new Error("No image data");
+        const aiMsg: Message = { role: "assistant", content: `![${prompt}](${imgSrc})` };
+        const finalImgMessages = [...withUser, aiMsg];
+        setMessages(finalImgMessages);
+        const imgConv: Conversation = {
+          id: id!,
+          title: conv?.title ?? `${MODES_META[mode].label} Session`,
+          lastMessage: `🎨 ${prompt}`,
+          mode,
+          timestamp: Date.now(),
+          messageCount: finalImgMessages.length,
+          messages: finalImgMessages,
+        };
+        setConv(imgConv);
+        void upsertConversation(imgConv);
+      } catch {
+        setMessages((prev) => [...prev, { role: "assistant", content: "⚠ Image generation failed. Try a more descriptive prompt." }]);
+      } finally {
+        setStreaming(false);
+        setIsImageGenerating(false);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
+      return;
+    }
 
     const base = overrideMessages ?? messages;
     const userMsg: Message = { role: "user", content: text };
@@ -328,6 +382,7 @@ export default function Chat() {
       <style>{`
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
         @keyframes voicePulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.15);opacity:0.8} }
+        @keyframes imgShimmer { 0%{background-position:200% center} 100%{background-position:-200% center} }
       `}</style>
 
       {/* Sacred Geometry background */}
@@ -367,10 +422,21 @@ export default function Chat() {
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 14, opacity: 0.6 }}>
             <span style={{ fontSize: 44 }}>{modeMeta.icon}</span>
             <div style={{ fontSize: 17, fontWeight: 700, color: Colors.textSecondary }}>{modeMeta.label} Mode</div>
-            <div style={{ fontSize: 13, color: Colors.textMuted, textAlign: "center", maxWidth: 280, lineHeight: 1.6 }}>Ask anything. GODMODE is ready.</div>
-            {hasVoice && (
-              <div style={{ fontSize: 12, color: Colors.textMuted }}>🎤 Voice input available</div>
-            )}
+            <div style={{ fontSize: 13, color: Colors.textMuted, textAlign: "center", maxWidth: 300, lineHeight: 1.7 }}>
+              Ask anything, or type <span style={{ color: modeColors.color, fontWeight: 600 }}>/imagine</span> to generate an image from a vibe
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", maxWidth: 320 }}>
+              {["a neon Tokyo alley at 3am", "cosmic void energy", "cyberpunk neural forest"].map((hint) => (
+                <button
+                  key={hint}
+                  onClick={() => { setInput(`/imagine ${hint}`); inputRef.current?.focus(); }}
+                  style={{ background: `${modeColors.color}10`, border: `1px solid ${modeColors.color}33`, color: modeColors.color, fontSize: 11, padding: "4px 10px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}
+                >
+                  🎨 {hint}
+                </button>
+              ))}
+            </div>
+            {hasVoice && <div style={{ fontSize: 12, color: Colors.textMuted }}>🎤 Voice input available</div>}
           </div>
         )}
 
@@ -382,12 +448,22 @@ export default function Chat() {
           <MessageBubble message={{ role: "assistant", content: streamingContent }} modeColor={modeColors.color} isStreaming />
         )}
 
-        {streaming && !streamingContent && (
+        {streaming && !streamingContent && !isImageGenerating && (
           <div style={{ display: "flex", justifyContent: "flex-start" }}>
             <div style={{ backgroundColor: Colors.aiBubble, border: `1px solid ${Colors.aiBubbleBorder}`, borderRadius: "4px 14px 14px 14px", padding: "14px 18px", display: "flex", gap: 6, alignItems: "center" }}>
               {[0, 1, 2].map((i) => (
                 <div key={i} style={{ width: 7, height: 7, borderRadius: "50%", backgroundColor: modeColors.color, opacity: 0.6, animation: `voicePulse 1.2s ease-in-out infinite`, animationDelay: `${i * 0.2}s` }} />
               ))}
+            </div>
+          </div>
+        )}
+
+        {isImageGenerating && (
+          <div style={{ display: "flex", justifyContent: "flex-start" }}>
+            <div style={{ width: 300, height: 200, borderRadius: 14, overflow: "hidden", border: `1px solid ${modeColors.color}30`, background: `linear-gradient(90deg, #080810 0%, #12121E 40%, #1A1A2E 50%, #12121E 60%, #080810 100%)`, backgroundSize: "300% 100%", animation: "imgShimmer 2s ease-in-out infinite", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+              <div style={{ fontSize: 32 }}>🎨</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: modeColors.color, animation: "blink 1.4s ease-in-out infinite", letterSpacing: 1 }}>GENERATING IMAGE</div>
+              <div style={{ fontSize: 10, color: Colors.textMuted }}>~15–30 seconds</div>
             </div>
           </div>
         )}
@@ -424,6 +500,15 @@ export default function Chat() {
       {/* Input Bar */}
       <div style={{ position: "relative", zIndex: 2, padding: "10px 14px 18px", backgroundColor: "rgba(5,5,8,0.96)", backdropFilter: "blur(16px)", borderTop: `1px solid ${Colors.border}` }}>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 8, backgroundColor: Colors.bgInput, border: `1px solid ${Colors.borderBright}`, borderRadius: 18, padding: "8px 10px 8px 14px" }}>
+          {/* Image gen button */}
+          <button
+            onClick={() => { setInput((v) => v.startsWith("/imagine ") ? v : "/imagine "); setTimeout(() => inputRef.current?.focus(), 0); }}
+            title="Generate image from vibe (/imagine)"
+            disabled={streaming}
+            style={{ flexShrink: 0, width: 32, height: 32, borderRadius: "50%", background: "none", border: `1px solid ${Colors.border}`, color: Colors.textMuted, cursor: streaming ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontFamily: "inherit", transition: "all 0.15s" }}
+            onMouseEnter={(e) => { if (!streaming) { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = Colors.accentGold; b.style.color = Colors.accentGold; } }}
+            onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = Colors.border; b.style.color = Colors.textMuted; }}
+          >🎨</button>
           {/* Voice button */}
           {hasVoice && (
             <button
@@ -455,7 +540,7 @@ export default function Chat() {
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 7 }}>
-          <span style={{ fontSize: 10, color: Colors.textMuted }}>Enter to send · Shift+Enter for new line{hasVoice ? " · 🎤 voice" : ""}</span>
+          <span style={{ fontSize: 10, color: Colors.textMuted }}>🎨 /imagine [vibe] · Enter to send{hasVoice ? " · 🎤 voice" : ""}</span>
           {messages.some((m) => m.role === "assistant") && !streaming && (
             <button
               onClick={() => { void handleShare(); }}

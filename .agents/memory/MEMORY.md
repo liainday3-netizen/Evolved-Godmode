@@ -1,0 +1,2 @@
+- [Image gen in chat](image-gen-chat.md) — /imagine inline in sendMessage; store as markdown ![alt](data:...) for ReactMarkdown img component
+- [API image route](image-gen-chat.md) — registerImageRoutes(app) must be called in app.ts after app.use("/api", router); route lives at /api/generate-image
