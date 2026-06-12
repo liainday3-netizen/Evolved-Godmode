@@ -6,10 +6,6 @@ import { eq, desc, asc, and } from "drizzle-orm";
 const router: IRouter = Router();
 
 function getOwner(req: Parameters<Parameters<typeof router.get>[1]>[0]): string {
-  const headerUserId = req.headers["x-user-id"];
-  if (typeof headerUserId === "string" && headerUserId.trim()) {
-    return headerUserId.trim();
-  }
   return req.session.clientId as string;
 }
 

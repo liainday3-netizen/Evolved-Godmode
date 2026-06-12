@@ -3,10 +3,13 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import { WebhookHandlers } from "./webhookHandlers";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { randomUUID } from "crypto";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { registerImageRoutes } from "./replit_integrations/image";
+
+const PgStore = connectPgSimple(session);
 
 declare module "express-session" {
   interface SessionData {
@@ -57,9 +60,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const sessionSecret = process.env["SESSION_SECRET"] ?? randomUUID();
+const databaseUrl = process.env["DATABASE_URL"];
 
 app.use(
   session({
+    store: databaseUrl
+      ? new PgStore({
+          conString: databaseUrl,
+          createTableIfMissing: true,
+          ttl: 365 * 24 * 60 * 60,
+        })
+      : undefined,
     secret: sessionSecret,
     resave: false,
     saveUninitialized: true,

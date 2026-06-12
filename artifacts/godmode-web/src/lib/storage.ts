@@ -37,18 +37,30 @@ export async function migrateLocalStorageIfNeeded(): Promise<void> {
   if (typeof window === "undefined") return;
   if (localStorage.getItem(MIGRATION_DONE_KEY)) return;
 
+  const raw = localStorage.getItem(LEGACY_CONV_KEY);
+  if (!raw) {
+    localStorage.setItem(MIGRATION_DONE_KEY, "1");
+    return;
+  }
+
   try {
-    const raw = localStorage.getItem(LEGACY_CONV_KEY);
-    if (raw) {
-      const old = JSON.parse(raw) as Conversation[];
-      for (const conv of old) {
-        await createConversation(conv).catch(() => {});
+    const old = JSON.parse(raw) as Conversation[];
+    let anyFailed = false;
+    for (const conv of old) {
+      try {
+        await createConversation(conv);
+      } catch {
+        anyFailed = true;
       }
-      localStorage.removeItem(LEGACY_CONV_KEY);
     }
+    if (!anyFailed) {
+      // All conversations safely uploaded — remove local copy
+      localStorage.removeItem(LEGACY_CONV_KEY);
+      localStorage.setItem(MIGRATION_DONE_KEY, "1");
+    }
+    // If some failed, don't mark done — retry on next visit
   } catch {
-    // best-effort; never block the app
-  } finally {
+    // Invalid JSON or other parse error — skip this data but mark done
     localStorage.setItem(MIGRATION_DONE_KEY, "1");
   }
 }
