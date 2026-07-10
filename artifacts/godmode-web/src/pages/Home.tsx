@@ -10,6 +10,7 @@ import {
   type Conversation,
 } from "@/lib/storage";
 import { SacredGeometry } from "@/components/SacredGeometry";
+import { getUserId } from "@/lib/user";
 
 const MODES: { id: GodMode; label: string; desc: string; icon: string }[] = [
   { id: "genius", label: "Genius", desc: "All-knowing intellect", icon: "⚡" },
@@ -103,8 +104,17 @@ export default function Home() {
   const [creating, setCreating] = useState(false);
   const [hoveredMode, setHoveredMode] = useState<GodMode | null>(null);
   const [hoveredConv, setHoveredConv] = useState<string | null>(null);
+  const [isPro, setIsPro] = useState(false);
 
   const modeColors = Colors.modes[selectedMode];
+
+  useEffect(() => {
+    const userId = getUserId();
+    fetch(`/api/stripe/subscription/${userId}`)
+      .then((r) => r.json())
+      .then((d: { active?: boolean }) => { if (d.active) setIsPro(true); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -250,9 +260,9 @@ export default function Home() {
             <button
               onClick={() => navigate("/pricing")}
               style={{
-                background: "rgba(0,212,255,0.1)",
-                border: `1px solid ${Colors.accent}`,
-                color: Colors.accent,
+                background: isPro ? "rgba(200,168,75,0.12)" : "rgba(0,212,255,0.1)",
+                border: `1px solid ${isPro ? Colors.accentGold : Colors.accent}`,
+                color: isPro ? Colors.accentGold : Colors.accent,
                 cursor: "pointer",
                 fontSize: 11,
                 fontWeight: 700,
@@ -263,15 +273,17 @@ export default function Home() {
                 transition: "all 0.15s",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(0,212,255,0.18)";
+                (e.currentTarget as HTMLButtonElement).style.background = isPro
+                  ? "rgba(200,168,75,0.2)"
+                  : "rgba(0,212,255,0.18)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(0,212,255,0.1)";
+                (e.currentTarget as HTMLButtonElement).style.background = isPro
+                  ? "rgba(200,168,75,0.12)"
+                  : "rgba(0,212,255,0.1)";
               }}
             >
-              Pro ✦
+              {isPro ? "✦ Pro" : "Upgrade"}
             </button>
           </div>
         </div>
