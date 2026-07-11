@@ -41,11 +41,20 @@ export default function Pricing() {
   const [email, setEmail] = useState("");
   const [selectedInterval, setSelectedInterval] = useState<"month" | "year">("month");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isPro, setIsPro] = useState(false);
 
   const params = new URLSearchParams(window.location.search);
-  const success = params.get("success") === "1";
   const canceled = params.get("canceled") === "1";
+
+  useEffect(() => {
+    const userId = getUserId();
+    fetch(`/api/stripe/subscription/${userId}`)
+      .then(r => r.json())
+      .then((d: { active?: boolean }) => { if (d.active) setIsPro(true); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/stripe/products")
@@ -61,6 +70,25 @@ export default function Pricing() {
   const selectedPrice = proProduct?.prices.find(
     (p) => p.recurring?.interval === selectedInterval
   );
+
+  const handlePortal = async () => {
+    setPortalLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/stripe/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: getUserId() }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (data.url) { window.location.href = data.url; }
+      else { setError(data.error ?? "Could not open billing portal."); }
+    } catch {
+      setError("Could not open billing portal.");
+    } finally {
+      setPortalLoading(false);
+    }
+  };
 
   const handleCheckout = async () => {
     if (!selectedPrice) return;
@@ -106,10 +134,17 @@ export default function Pricing() {
           <span style={{ fontSize: 13, fontWeight: 700, color: Colors.text, marginLeft: 8 }}>GODMODE</span>
         </div>
 
-        {/* Banner */}
-        {success && (
-          <div style={{ margin: "20px 0", padding: "14px 18px", borderRadius: 12, backgroundColor: "rgba(0,255,204,0.08)", border: "1px solid rgba(0,255,204,0.3)", color: "#00FFCC", fontSize: 14, fontWeight: 600 }}>
-            ✓ Welcome to GODMODE Pro! Unlimited AI power unlocked.
+        {/* Pro active banner */}
+        {isPro && (
+          <div style={{ margin: "20px 0", padding: "14px 18px", borderRadius: 12, backgroundColor: "rgba(200,168,75,0.08)", border: "1px solid rgba(200,168,75,0.4)", color: Colors.accentGold, fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <span>✦ You're on GODMODE Pro — unlimited AI power active.</span>
+            <button
+              onClick={() => { void handlePortal(); }}
+              disabled={portalLoading}
+              style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${Colors.accentGold}`, background: "rgba(200,168,75,0.12)", color: Colors.accentGold, cursor: portalLoading ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit", whiteSpace: "nowrap", opacity: portalLoading ? 0.6 : 1 }}
+            >
+              {portalLoading ? "Opening…" : "Manage Plan"}
+            </button>
           </div>
         )}
         {canceled && (

@@ -10,6 +10,8 @@ export const users = pgTable("users", {
   stripeSubscriptionId: text("stripe_subscription_id"),
   dailyMessageCount: integer("daily_message_count").default(0).notNull(),
   lastMessageDate: date("last_message_date"),
+  dailyImageCount: integer("daily_image_count").default(0).notNull(),
+  lastImageDate: date("last_image_date"),
   createdAt: timestamp("created_at").default(sql`NOW()`).notNull(),
 });
 

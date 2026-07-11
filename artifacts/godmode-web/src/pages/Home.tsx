@@ -105,15 +105,23 @@ export default function Home() {
   const [hoveredMode, setHoveredMode] = useState<GodMode | null>(null);
   const [hoveredConv, setHoveredConv] = useState<string | null>(null);
   const [isPro, setIsPro] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   const modeColors = Colors.modes[selectedMode];
 
   useEffect(() => {
-    const userId = getUserId();
-    fetch(`/api/stripe/subscription/${userId}`)
-      .then((r) => r.json())
-      .then((d: { active?: boolean }) => { if (d.active) setIsPro(true); })
-      .catch(() => {});
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("welcome") === "1") {
+      setShowWelcome(true);
+      setIsPro(true);
+      window.history.replaceState({}, "", window.location.pathname);
+    } else {
+      const userId = getUserId();
+      fetch(`/api/stripe/subscription/${userId}`)
+        .then((r) => r.json())
+        .then((d: { active?: boolean }) => { if (d.active) setIsPro(true); })
+        .catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -207,6 +215,31 @@ export default function Home() {
           flex: 1,
         }}
       >
+        {/* Welcome banner after Pro checkout */}
+        {showWelcome && (
+          <div style={{
+            margin: "16px 24px 0",
+            padding: "14px 18px",
+            borderRadius: 14,
+            background: "rgba(200,168,75,0.08)",
+            border: "1px solid rgba(200,168,75,0.4)",
+            color: Colors.accentGold,
+            fontSize: 14,
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            animation: "fadeUp 0.4s ease",
+          }}>
+            <span>✦ Welcome to GODMODE Pro — unlimited AI power unlocked.</span>
+            <button
+              onClick={() => setShowWelcome(false)}
+              style={{ background: "none", border: "none", color: Colors.accentGold, cursor: "pointer", fontSize: 18, padding: "0 4px", fontFamily: "inherit" }}
+            >×</button>
+          </div>
+        )}
+
         {/* Header */}
         <div
           style={{

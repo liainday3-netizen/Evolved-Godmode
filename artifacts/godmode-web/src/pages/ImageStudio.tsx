@@ -73,15 +73,20 @@ export default function ImageStudio() {
     const p = prompt.trim();
     if (!p || generating) return;
     setGenerating(true);
-    setSelected(null); // clear previous image immediately
+    setSelected(null);
     setError("");
     try {
+      const userId = (await import("@/lib/user")).getUserId();
       const res = await fetch(`${base}/api/studio/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: p, style, size }),
+        body: JSON.stringify({ prompt: p, style, size, userId }),
       });
-      const data = await res.json() as { b64_json?: string; url?: string; enhancedPrompt?: string; error?: string };
+      const data = await res.json() as { b64_json?: string; url?: string; enhancedPrompt?: string; error?: string; limitReached?: boolean };
+      if (res.status === 402 || data.limitReached) {
+        setError("Free limit reached — 2 images per day. Upgrade to Pro for unlimited.");
+        return;
+      }
       if (!res.ok || data.error) { setError(data.error ?? "Generation failed"); return; }
       if (!data.b64_json) { setError("No image returned — try a different prompt."); return; }
       const gen: Generation = {

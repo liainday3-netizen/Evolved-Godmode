@@ -83,7 +83,7 @@ router.post("/stripe/checkout", async (req, res) => {
       payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: "subscription",
-      success_url: `${baseUrl}/godmode-web/pricing?success=1`,
+      success_url: `${baseUrl}/godmode-web/?welcome=1`,
       cancel_url: `${baseUrl}/godmode-web/pricing?canceled=1`,
     });
 

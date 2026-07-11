@@ -1,0 +1,57 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#050508"/>
+
+  <!-- Grid lines -->
+  <line x1="0" y1="210" x2="1200" y2="210" stroke="#1E1E2E" stroke-width="1"/>
+  <line x1="0" y1="420" x2="1200" y2="420" stroke="#1E1E2E" stroke-width="1"/>
+  <line x1="400" y1="0" x2="400" y2="630" stroke="#1E1E2E" stroke-width="1"/>
+  <line x1="800" y1="0" x2="800" y2="630" stroke="#1E1E2E" stroke-width="1"/>
+
+  <!-- Sacred geometry background -->
+  <circle cx="600" cy="315" r="260" stroke="#1E1E2E" stroke-width="1" fill="none"/>
+  <circle cx="600" cy="315" r="180" stroke="#00D4FF" stroke-width="0.5" fill="none" opacity="0.3"/>
+  <circle cx="600" cy="315" r="120" stroke="#C8A84B" stroke-width="0.5" fill="none" opacity="0.3"/>
+  <polygon points="600,75 820,420 380,420" stroke="#00D4FF" stroke-width="1" fill="none" opacity="0.2"/>
+  <polygon points="600,555 380,210 820,210" stroke="#C8A84B" stroke-width="1" fill="none" opacity="0.2"/>
+
+  <!-- Glow behind text -->
+  <ellipse cx="600" cy="300" rx="350" ry="120" fill="#00D4FF" opacity="0.04"/>
+
+  <!-- GODMODE wordmark -->
+  <text x="600" y="260" font-family="'Inter', 'Arial Black', sans-serif" font-weight="800" font-size="96" fill="#F0F0FF" text-anchor="middle" letter-spacing="-4">GODMODE</text>
+
+  <!-- Accent line -->
+  <rect x="480" y="278" width="240" height="2" fill="url(#accentGrad)" rx="1"/>
+
+  <!-- Tagline -->
+  <text x="600" y="330" font-family="'Inter', 'Arial', sans-serif" font-weight="500" font-size="22" fill="#7070A0" text-anchor="middle" letter-spacing="1">EVOLVED AI</text>
+
+  <!-- Feature pills -->
+  <rect x="220" y="385" width="140" height="36" rx="18" fill="#0C0C12" stroke="#00D4FF" stroke-width="1"/>
+  <text x="290" y="408" font-family="'Inter', 'Arial', sans-serif" font-weight="600" font-size="14" fill="#00D4FF" text-anchor="middle">⚡ Genius</text>
+
+  <rect x="375" y="385" width="140" height="36" rx="18" fill="#0C0C12" stroke="#00FFCC" stroke-width="1"/>
+  <text x="445" y="408" font-family="'Inter', 'Arial', sans-serif" font-weight="600" font-size="14" fill="#00FFCC" text-anchor="middle">&lt;/&gt; Coder</text>
+
+  <rect x="530" y="385" width="140" height="36" rx="18" fill="#0C0C12" stroke="#C8A84B" stroke-width="1"/>
+  <text x="600" y="408" font-family="'Inter', 'Arial', sans-serif" font-weight="600" font-size="14" fill="#C8A84B" text-anchor="middle">◈ Strategist</text>
+
+  <rect x="685" y="385" width="140" height="36" rx="18" fill="#0C0C12" stroke="#C084FC" stroke-width="1"/>
+  <text x="755" y="408" font-family="'Inter', 'Arial', sans-serif" font-weight="600" font-size="14" fill="#C084FC" text-anchor="middle">◉ Oracle</text>
+
+  <!-- Bottom label -->
+  <text x="600" y="490" font-family="'Inter', 'Arial', sans-serif" font-weight="400" font-size="16" fill="#404060" text-anchor="middle" letter-spacing="3">IMAGE STUDIO · AI CODE GEN · COMMUNITY</text>
+
+  <!-- Cyan accent dots -->
+  <circle cx="160" cy="160" r="3" fill="#00D4FF" opacity="0.5"/>
+  <circle cx="1040" cy="160" r="3" fill="#00D4FF" opacity="0.5"/>
+  <circle cx="160" cy="470" r="3" fill="#C8A84B" opacity="0.5"/>
+  <circle cx="1040" cy="470" r="3" fill="#C8A84B" opacity="0.5"/>
+
+  <defs>
+    <linearGradient id="accentGrad" x1="480" y1="0" x2="720" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#00D4FF"/>
+      <stop offset="100%" stop-color="#C8A84B"/>
+    </linearGradient>
+  </defs>
+</svg>
