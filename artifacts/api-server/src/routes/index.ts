@@ -6,6 +6,7 @@ import stripeRouter from "./stripe";
 import communityRouter from "./community";
 import conversationsRouter from "./conversations";
 import tradingRouter from "./trading";
+import studioRouter from "./studio";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(stripeRouter);
 router.use(communityRouter);
 router.use(conversationsRouter);
 router.use(tradingRouter);
+router.use(studioRouter);
 
 export default router;

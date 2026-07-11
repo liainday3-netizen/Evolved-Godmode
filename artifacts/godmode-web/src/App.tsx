@@ -5,6 +5,7 @@ import Pricing from "@/pages/Pricing";
 import Community from "@/pages/Community";
 import CodeGen from "@/pages/CodeGen";
 import TradingBot from "@/pages/TradingBot";
+import ImageStudio from "@/pages/ImageStudio";
 
 function Router() {
   return (
@@ -15,6 +16,7 @@ function Router() {
       <Route path="/community" component={Community} />
       <Route path="/codegen" component={CodeGen} />
       <Route path="/trading" component={TradingBot} />
+      <Route path="/studio" component={ImageStudio} />
       <Route>
         <Home />
       </Route>

@@ -7,46 +7,40 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-// Get products with prices from Stripe-synced DB
+// Get products with prices directly from Stripe API
 router.get("/stripe/products", async (_req, res) => {
   try {
-    const result = await db.execute(sql`
-      SELECT
-        p.id as product_id,
-        p.name as product_name,
-        p.description as product_description,
-        p.metadata as product_metadata,
-        pr.id as price_id,
-        pr.unit_amount,
-        pr.currency,
-        pr.recurring,
-        pr.active as price_active
-      FROM stripe.products p
-      LEFT JOIN stripe.prices pr ON pr.product = p.id AND pr.active = true
-      WHERE p.active = true
-      ORDER BY pr.unit_amount ASC
-    `);
+    const stripe = await getUncachableStripeClient();
+    const [productsRes, pricesRes] = await Promise.all([
+      stripe.products.list({ active: true, limit: 100 }),
+      stripe.prices.list({ active: true, limit: 100 }),
+    ]);
 
     const productsMap = new Map<string, any>();
-    for (const row of result.rows as any[]) {
-      if (!productsMap.has(row.product_id)) {
-        productsMap.set(row.product_id, {
-          id: row.product_id,
-          name: row.product_name,
-          description: row.product_description,
-          metadata: row.product_metadata,
-          prices: [],
+    for (const p of productsRes.data) {
+      productsMap.set(p.id, {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        metadata: p.metadata,
+        prices: [],
+      });
+    }
+    for (const pr of pricesRes.data) {
+      const productId = typeof pr.product === "string" ? pr.product : pr.product.id;
+      if (productsMap.has(productId)) {
+        productsMap.get(productId).prices.push({
+          id: pr.id,
+          unit_amount: pr.unit_amount,
+          currency: pr.currency,
+          recurring: pr.recurring,
+          active: pr.active,
         });
       }
-      if (row.price_id) {
-        productsMap.get(row.product_id).prices.push({
-          id: row.price_id,
-          unit_amount: row.unit_amount,
-          currency: row.currency,
-          recurring: row.recurring,
-          active: row.price_active,
-        });
-      }
+    }
+    // Sort prices by unit_amount within each product
+    for (const product of productsMap.values()) {
+      product.prices.sort((a: any, b: any) => (a.unit_amount ?? 0) - (b.unit_amount ?? 0));
     }
     res.json({ data: Array.from(productsMap.values()) });
   } catch (err) {

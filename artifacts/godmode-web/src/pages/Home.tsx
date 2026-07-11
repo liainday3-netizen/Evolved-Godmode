@@ -248,6 +248,11 @@ export default function Home() {
               onClick={() => navigate("/codegen")}
             />
             <NavBtn
+              label="✦ Studio"
+              color={Colors.accentGold}
+              onClick={() => navigate("/studio")}
+            />
+            <NavBtn
               label="◉ Hub"
               color="#C084FC"
               onClick={() => navigate("/community")}
