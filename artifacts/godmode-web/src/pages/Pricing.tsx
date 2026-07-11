@@ -217,7 +217,7 @@ export default function Pricing() {
               style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${Colors.borderBright}`, backgroundColor: Colors.bgInput, color: Colors.text, fontSize: 14, fontFamily: "inherit", marginBottom: 10, boxSizing: "border-box", outline: "none" }}
             />
             <button
-              onClick={handleCheckout}
+              onClick={() => { void handleCheckout(); }}
               disabled={checkoutLoading || !selectedPrice}
               style={{ width: "100%", padding: "14px 20px", borderRadius: 12, border: "none", backgroundColor: Colors.accent, color: Colors.bg, fontSize: 15, fontWeight: 700, cursor: (checkoutLoading || !selectedPrice) ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: (checkoutLoading || !selectedPrice) ? 0.6 : 1, transition: "opacity 0.15s" }}
             >

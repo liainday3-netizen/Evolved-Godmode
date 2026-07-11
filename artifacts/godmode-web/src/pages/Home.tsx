@@ -241,7 +241,7 @@ export default function Home() {
               GODMODE
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <NavBtn
               label="</> Code"
               color={Colors.accentElectric}

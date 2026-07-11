@@ -1,7 +1,12 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import Colors from "@/lib/colors";
 import { SacredGeometry } from "@/components/SacredGeometry";
+
+const SHIMMER_CSS = `
+@keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
+@keyframes studioFadeIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
+`;
 
 const STYLES = [
   { id: "token",    label: "Crypto Token",   icon: "◈", color: Colors.accentGold,    desc: "Coin art, emblem, mint-quality" },
@@ -51,16 +56,27 @@ export default function ImageStudio() {
   const [selected, setSelected] = useState<Generation | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Inject shimmer CSS once
+  useEffect(() => {
+    const el = document.createElement("style");
+    el.textContent = SHIMMER_CSS;
+    document.head.appendChild(el);
+    return () => { el.remove(); };
+  }, []);
+
   const selectedStyle = STYLES.find(s => s.id === style) ?? STYLES[0];
   const starters = PROMPT_STARTERS[style] ?? PROMPT_STARTERS.token;
+
+  const base = (import.meta.env.BASE_URL ?? "").replace(/\/$/, "");
 
   const handleGenerate = useCallback(async () => {
     const p = prompt.trim();
     if (!p || generating) return;
     setGenerating(true);
+    setSelected(null); // clear previous image immediately
     setError("");
     try {
-      const res = await fetch("/api/studio/generate", {
+      const res = await fetch(`${base}/api/studio/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: p, style, size }),
@@ -277,7 +293,7 @@ export default function ImageStudio() {
               minHeight: 320,
               background: `linear-gradient(90deg, ${Colors.bgCard} 25%, ${Colors.bgElevated} 50%, ${Colors.bgCard} 75%)`,
               backgroundSize: "200% 100%",
-              animation: "shimmer 1.5s infinite",
+              animation: "shimmer 1.5s linear infinite",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -287,13 +303,12 @@ export default function ImageStudio() {
               <div style={{ fontSize: 32, opacity: 0.4 }}>✦</div>
               <div style={{ fontSize: 13, color: Colors.textMuted }}>Generating {selectedStyle.label}…</div>
             </div>
-            <style>{`@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}`}</style>
           </div>
         )}
 
         {/* Selected image viewer */}
         {!generating && selected && (
-          <div style={{ marginTop: 28 }}>
+          <div style={{ marginTop: 28, animation: "studioFadeIn 0.3s ease" }}>
             <div style={{ ...imgStyle, borderRadius: 16, overflow: "hidden", border: `1px solid ${selectedStyle.color}40`, boxShadow: `0 0 40px ${selectedStyle.color}20` }}>
               <img
                 src={`data:image/png;base64,${selected.b64}`}

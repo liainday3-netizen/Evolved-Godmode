@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { users } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getUncachableStripeClient } from "../stripeClient";
 import { logger } from "../lib/logger";
 
@@ -119,7 +119,7 @@ router.post("/stripe/portal", async (req, res) => {
   }
 });
 
-// Get subscription status for a user
+// Get subscription status for a user — queries Stripe API directly
 router.get("/stripe/subscription/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
@@ -129,15 +129,18 @@ router.get("/stripe/subscription/:userId", async (req, res) => {
       return;
     }
 
-    const result = await db.execute(sql`
-      SELECT status FROM stripe.subscriptions
-      WHERE customer = ${user.stripeCustomerId}
-      ORDER BY created DESC LIMIT 1
-    `);
+    const stripe = await getUncachableStripeClient();
+    const subs = await stripe.subscriptions.list({
+      customer: user.stripeCustomerId,
+      status: "active",
+      limit: 1,
+    });
+    const trialing = subs.data.length === 0
+      ? await stripe.subscriptions.list({ customer: user.stripeCustomerId, status: "trialing", limit: 1 })
+      : null;
 
-    const sub = result.rows[0] as any;
-    const active = sub?.status === "active" || sub?.status === "trialing";
-    res.json({ active, status: sub?.status ?? null });
+    const activeSub = subs.data[0] ?? trialing?.data[0] ?? null;
+    res.json({ active: activeSub !== null, status: activeSub?.status ?? null });
   } catch (err) {
     logger.error({ err }, "Subscription check error");
     res.json({ active: false });
