@@ -106,7 +106,7 @@ export function SacredGeometry({
       false
     );
     pulse.value = withRepeat(
-      withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.sine) }),
+      withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.sin) }),
       -1,
       true
     );
