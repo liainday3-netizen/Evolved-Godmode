@@ -1,3 +1,4 @@
 - [Image gen in chat](image-gen-chat.md) — /imagine inline in sendMessage; store as markdown ![alt](data:...) for ReactMarkdown img component
 - [API image route](image-gen-chat.md) — registerImageRoutes(app) must be called in app.ts after app.use("/api", router); route lives at /api/generate-image
 - [Stripe products endpoint](stripe-products.md) — query Stripe API directly, not stripe.products DB table (generated columns block INSERT)
+- [Dependency maintenance](dependency-maintenance.md) — security overrides and versioned Expo patches must follow the resolved pnpm graph
