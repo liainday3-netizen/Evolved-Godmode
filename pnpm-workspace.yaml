@@ -1,6 +1,6 @@
-# ============================================================================
+# ----------------------------------------------------------------------------
 # SECURITY: Minimum release age for npm packages (supply-chain attack defense)
-# ============================================================================
+# ----------------------------------------------------------------------------
 #
 # This setting requires that any npm package version must have been published
 # for at least 1 day (1440 minutes) before pnpm will allow installing it.
@@ -24,7 +24,7 @@
 #     - react
 #     - typescript
 #
-# ============================================================================
+# ----------------------------------------------------------------------------
 minimumReleaseAge: 1440
 
 minimumReleaseAgeExclude:
@@ -181,3 +181,10 @@ overrides:
   image-size: "file:./vendor/image-size"
   browserslist: "4.28.8"
   decode-uri-component: "0.5.0"
+  node-forge: "1.4.0"
+  minimatch: "10.2.5"
+  flatted: "3.4.2"
+  "@xmldom/xmldom": "0.9.10"
+  "@isaacs/brace-expansion": "5.0.1"
+  picomatch: "4.0.4"
+  path-to-regexp: "8.4.2"
