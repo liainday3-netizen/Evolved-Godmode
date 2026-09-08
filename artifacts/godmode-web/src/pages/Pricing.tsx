@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import Colors from "@/lib/colors";
 import { getUserId } from "@/lib/user";
 import { SacredGeometry } from "@/components/SacredGeometry";
+import LegalFooter from "@/components/LegalFooter";
 
 interface Price {
   id: string;
@@ -263,6 +264,7 @@ export default function Pricing() {
             </div>
           </div>
         </div>
+        <LegalFooter />
       </div>
     </div>
   );

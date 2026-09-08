@@ -6,6 +6,7 @@ import Community from "@/pages/Community";
 import CodeGen from "@/pages/CodeGen";
 import TradingBot from "@/pages/TradingBot";
 import ImageStudio from "@/pages/ImageStudio";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
 
 function Router() {
   return (
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/codegen" component={CodeGen} />
       <Route path="/trading" component={TradingBot} />
       <Route path="/studio" component={ImageStudio} />
+      <Route path="/privacy" component={PrivacyPolicy} />
       <Route>
         <Home />
       </Route>
