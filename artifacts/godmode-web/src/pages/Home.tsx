@@ -10,7 +10,7 @@ import {
   type Conversation,
 } from "@/lib/storage";
 import { SacredGeometry } from "@/components/SacredGeometry";
-import LegalFooter from "@/components/LegalFooter";
+import PublicFooter from "@/components/PublicFooter";
 import { getUserId } from "@/lib/user";
 
 const MODES: { id: GodMode; label: string; desc: string; icon: string }[] = [
@@ -678,7 +678,7 @@ export default function Home() {
             </div>
           )}
         </div>
-        <LegalFooter />
+        <PublicFooter />
       </div>
     </div>
   );
