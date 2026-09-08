@@ -1,10 +1,13 @@
 import Stripe from 'stripe';
 import { StripeSync } from 'stripe-replit-sync';
 
-async function getStripeCredentials(): Promise<{ secretKey: string; webhookSecret?: string }> {
+export async function getStripeCredentials(): Promise<{ secretKey: string; webhookSecret?: string }> {
   // Prefer direct env var (manual key setup)
   if (process.env.STRIPE_SECRET_KEY) {
-    return { secretKey: process.env.STRIPE_SECRET_KEY };
+    return {
+      secretKey: process.env.STRIPE_SECRET_KEY,
+      webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    };
   }
 
   // Fall back to Replit integration proxy

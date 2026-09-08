@@ -3,8 +3,7 @@ import { db } from "@workspace/db";
 import { users } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { logger } from "./lib/logger";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "");
+import { getStripeCredentials } from "./stripeClient";
 
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string): Promise<void> {
@@ -15,7 +14,7 @@ export class WebhookHandlers {
       );
     }
 
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    const { secretKey, webhookSecret } = await getStripeCredentials();
     if (!webhookSecret) {
       logger.warn("STRIPE_WEBHOOK_SECRET not set — skipping signature verification");
       return;
@@ -23,6 +22,7 @@ export class WebhookHandlers {
 
     let event: Stripe.Event;
     try {
+      const stripe = new Stripe(secretKey);
       event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
     } catch (err: any) {
       throw new Error(`Webhook signature verification failed: ${err.message}`);
