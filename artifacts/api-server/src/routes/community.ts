@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { z } from "zod/v4";
 import { db } from "@workspace/db";
 import { communityPosts, postUpvotes, users } from "@workspace/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -45,10 +45,20 @@ router.get("/community", async (req, res): Promise<void> => {
       .limit(rawLimit)
       .offset(rawOffset);
 
+    const voted = posts.length > 0
+      ? await db.select({ postId: postUpvotes.postId }).from(postUpvotes)
+          .where(and(
+            eq(postUpvotes.userId, ownerId),
+            inArray(postUpvotes.postId, posts.map((post) => post.id)),
+          ))
+      : [];
+    const votedIds = new Set(voted.map((vote) => vote.postId));
+
     res.json({
       data: posts.map((post) => ({
         ...post,
         isOwn: post.userId === ownerId,
+        hasUpvoted: votedIds.has(post.id),
       })),
     });
   } catch (error) {
