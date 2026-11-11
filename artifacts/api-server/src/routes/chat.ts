@@ -176,7 +176,11 @@ router.post("/chat", async (req, res): Promise<void> => {
       model: "gpt-5.2",
       messages: [
         { role: "system", content: SYSTEM_PROMPTS[mode] },
-        ...messages,
+        ...messages.map((message) =>
+          message.role === "user"
+            ? { role: "user" as const, content: message.content }
+            : { role: "assistant" as const, content: message.content },
+        ),
       ],
       stream: true,
       max_completion_tokens: 8192,
