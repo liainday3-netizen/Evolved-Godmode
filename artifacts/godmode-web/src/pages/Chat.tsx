@@ -389,11 +389,13 @@ export default function Chat() {
     if (!lastUserMsg || !lastAiMsg) return;
     setShareState("sharing");
     try {
-      await fetch("/api/community", {
+      const response = await fetch("/api/community", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, mode, prompt: lastUserMsg.content, response: lastAiMsg.content }),
+        body: JSON.stringify({ mode, prompt: lastUserMsg.content, response: lastAiMsg.content }),
       });
+      if (!response.ok) throw new Error("Could not share this conversation.");
       setShareState("shared");
       setTimeout(() => setShareState("idle"), 3000);
     } catch { setShareState("idle"); }
