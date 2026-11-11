@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Response } from "express";
 import { z } from "zod/v4";
 import { db } from "@workspace/db";
 import { conversations, messages } from "@workspace/db";
@@ -26,9 +26,8 @@ function getOwner(req: Parameters<Parameters<typeof router.get>[1]>[0]): string 
   return req.session?.clientId || null;
 }
 
-function rejectMissingOwner(res: Parameters<Parameters<typeof router.get>[1]>[1]): boolean {
+function rejectMissingOwner(res: Response): void {
   res.status(401).json({ error: "A valid session is required." });
-  return true;
 }
 
 router.get("/conversations", async (req, res): Promise<void> => {
