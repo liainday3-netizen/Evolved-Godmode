@@ -7,6 +7,7 @@ import CodeGen from "@/pages/CodeGen";
 import TradingBot from "@/pages/TradingBot";
 import ImageStudio from "@/pages/ImageStudio";
 import Privacy from "@/pages/Privacy";
+import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
@@ -19,9 +20,7 @@ function Router() {
       <Route path="/trading" component={TradingBot} />
       <Route path="/studio" component={ImageStudio} />
       <Route path="/privacy" component={Privacy} />
-      <Route>
-        <Home />
-      </Route>
+      <Route component={NotFound} />
     </Switch>
   );
 }
