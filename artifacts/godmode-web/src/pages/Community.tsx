@@ -9,8 +9,8 @@ interface Post {
   mode: GodMode;
   prompt: string;
   response: string;
-  upvote_count: number;
-  created_at: string;
+  upvoteCount: number;
+  createdAt: string;
   isOwn?: boolean;
   hasUpvoted?: boolean;
 }
@@ -65,7 +65,7 @@ export default function Community() {
     });
     setPosts((prev) =>
       prev.map((p) =>
-        p.id === postId ? { ...p, upvote_count: p.upvote_count + (wasUpvoted ? -1 : 1) } : p
+        p.id === postId ? { ...p, upvote_count: p.upvoteCount + (wasUpvoted ? -1 : 1) } : p
       )
     );
     try {
@@ -145,7 +145,7 @@ export default function Community() {
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 20, backgroundColor: mc.bg, border: `1px solid ${mc.color}33`, fontSize: 11, fontWeight: 700, color: mc.color, letterSpacing: 1, textTransform: "uppercase" }}>
                         <span>{MODE_ICONS[post.mode] ?? "⚡"}</span> {post.mode}
                       </span>
-                      <span style={{ fontSize: 11, color: Colors.textMuted }}>{timeAgo(post.created_at)}</span>
+                      <span style={{ fontSize: 11, color: Colors.textMuted }}>{timeAgo(post.createdAt)}</span>
                     </div>
                     {isOwn && (
                       <button onClick={() => handleDelete(post.id)} style={{ background: "none", border: "none", color: Colors.textMuted, cursor: "pointer", fontSize: 16, padding: "2px 6px", transition: "color 0.15s" }}
@@ -176,7 +176,7 @@ export default function Community() {
                       style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 20, border: `1px solid ${hasUpvoted ? mc.color : Colors.border}`, backgroundColor: hasUpvoted ? mc.bg : "transparent", color: hasUpvoted ? mc.color : Colors.textMuted, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit", transition: "all 0.15s" }}
                     >
                       <span style={{ fontSize: 14 }}>{hasUpvoted ? "▲" : "△"}</span>
-                      <span>{post.upvote_count}</span>
+                      <span>{post.upvoteCount}</span>
                     </button>
                   </div>
                 </div>
