@@ -16,8 +16,10 @@ export class WebhookHandlers {
 
     const { secretKey, webhookSecret } = await getStripeCredentials();
     if (!webhookSecret) {
-      logger.warn("STRIPE_WEBHOOK_SECRET not set — skipping signature verification");
-      return;
+      // Never process payment events without verifying their Stripe signature.
+      // A missing secret is a configuration error, not a reason to trust the request.
+      logger.error("STRIPE_WEBHOOK_SECRET is missing — rejecting webhook");
+      throw new Error("Stripe webhook signature verification is not configured.");
     }
 
     let event: Stripe.Event;
