@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import Colors, { type GodMode } from "@/lib/colors";
-import { getUserId } from "@/lib/user";
 import { SacredGeometry } from "@/components/SacredGeometry";
 
 interface Post {
@@ -12,6 +11,8 @@ interface Post {
   response: string;
   upvote_count: number;
   created_at: string;
+  isOwn?: boolean;
+  hasUpvoted?: boolean;
 }
 
 const MODE_ICONS: Record<string, string> = {
@@ -36,12 +37,19 @@ export default function Community() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [upvoted, setUpvoted] = useState<Set<string>>(new Set());
-  const userId = getUserId();
 
   const fetchPosts = useCallback(() => {
-    fetch("/api/community?limit=30")
-      .then((r) => r.json())
-      .then((d) => { setPosts(d.data ?? []); setLoading(false); })
+    fetch("/api/community?limit=30", { credentials: "include" })
+      .then((r) => {
+        if (!r.ok) throw new Error("Could not load the community feed");
+        return r.json();
+      })
+      .then((d) => {
+        const items: Post[] = d.data ?? [];
+        setPosts(items);
+        setUpvoted(new Set(items.filter((post) => post.hasUpvoted).map((post) => post.id)));
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   }, []);
 
@@ -60,21 +68,26 @@ export default function Community() {
         p.id === postId ? { ...p, upvote_count: p.upvote_count + (wasUpvoted ? -1 : 1) } : p
       )
     );
-    await fetch(`/api/community/${postId}/upvote`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
+    try {
+      const response = await fetch(`/api/community/${postId}/upvote`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Vote failed");
+    } catch {
+      fetchPosts();
+    }
   };
 
   const handleDelete = async (postId: string) => {
     if (!window.confirm("Remove this post from the community?")) return;
-    await fetch(`/api/community/${postId}`, {
+    const response = await fetch(`/api/community/${postId}`, {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
+      credentials: "include",
     });
-    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    if (response.ok) {
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+    }
   };
 
   return (
@@ -118,7 +131,7 @@ export default function Community() {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {posts.map((post) => {
               const mc = Colors.modes[post.mode] ?? Colors.modes.genius;
-              const isOwn = post.userId === userId;
+              const isOwn = post.isOwn === true;
               const hasUpvoted = upvoted.has(post.id);
 
               return (
