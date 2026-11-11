@@ -251,7 +251,8 @@ export default function Chat() {
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-id": userId },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: newMessages, mode }),
         signal: abortRef.current.signal,
       });
@@ -270,22 +271,45 @@ export default function Chat() {
       const decoder = new TextDecoder();
       let fullContent = "";
       let buffer = "";
+      let streamDone = false;
 
-      while (true) {
+      const consumeEvent = (line: string) => {
+        if (!line.startsWith("data: ")) return;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") {
+          streamDone = true;
+          return;
+        }
+        try {
+          const parsed = JSON.parse(data) as { content?: string; error?: string };
+          if (parsed.error) throw new Error(parsed.error);
+          if (parsed.content) {
+            fullContent += parsed.content;
+            setStreamingContent(fullContent);
+          }
+        } catch (error) {
+          if (error instanceof Error && error.message !== "Unexpected end of JSON input") {
+            throw error;
+          }
+        }
+      };
+
+      while (!streamDone) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const data = line.slice(6).trim();
-          if (data === "[DONE]") { reader.cancel(); break; }
-          try {
-            const parsed = JSON.parse(data) as { content?: string; error?: string };
-            if (parsed.content) { fullContent += parsed.content; setStreamingContent(fullContent); }
-          } catch {}
+          consumeEvent(line);
+          if (streamDone) break;
         }
+      }
+
+      buffer += decoder.decode();
+      if (buffer.trim()) consumeEvent(buffer.trim());
+      if (!fullContent.trim()) {
+        throw new Error("The AI response was empty. Please try again.");
       }
 
       const assistantMsg: Message = { role: "assistant", content: fullContent };
