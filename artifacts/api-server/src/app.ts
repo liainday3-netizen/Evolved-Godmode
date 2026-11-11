@@ -10,6 +10,7 @@ import { logger } from "./lib/logger";
 import { registerImageRoutes } from "./replit_integrations/image";
 
 const PgStore = connectPgSimple(session);
+const isProduction = process.env.NODE_ENV === "production";
 
 declare module "express-session" {
   interface SessionData {
@@ -18,6 +19,12 @@ declare module "express-session" {
 }
 
 const app: Express = express();
+
+// Replit and other hosted deployments terminate TLS at a reverse proxy.
+// Trust one proxy hop so secure session cookies work behind that proxy.
+if (isProduction) {
+  app.set("trust proxy", 1);
+}
 
 app.use(
   pinoHttp({
@@ -33,9 +40,27 @@ app.use(
   }),
 );
 
-app.use(cors({ origin: true, credentials: true }));
+// In production, explicitly allow configured browser origins. Requests without
+// an Origin header (server-to-server/native clients) remain usable.
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-// Stripe webhook MUST be registered before express.json() — needs raw Buffer body
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || !isProduction) {
+        callback(null, true);
+        return;
+      }
+      callback(null, allowedOrigins.includes(origin));
+    },
+    credentials: true,
+  }),
+);
+
+// Stripe webhook MUST be registered before express.json() — needs raw Buffer body.
 app.post(
   "/api/stripe/webhook",
   express.raw({ type: "application/json" }),
@@ -49,17 +74,22 @@ app.post(
       const sig = Array.isArray(signature) ? signature[0] : signature;
       await WebhookHandlers.processWebhook(req.body as Buffer, sig);
       res.status(200).json({ received: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({ error }, "Stripe webhook error");
       res.status(400).json({ error: "Webhook processing error" });
     }
-  }
+  },
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Keep request bodies bounded to reduce accidental or abusive memory pressure.
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-const sessionSecret = process.env["SESSION_SECRET"] ?? randomUUID();
+const configuredSessionSecret = process.env["SESSION_SECRET"];
+if (isProduction && !configuredSessionSecret) {
+  throw new Error("SESSION_SECRET must be configured in production.");
+}
+const sessionSecret = configuredSessionSecret ?? randomUUID();
 const databaseUrl = process.env["DATABASE_URL"];
 
 app.use(
@@ -73,11 +103,14 @@ app.use(
       : undefined,
     secret: sessionSecret,
     resave: false,
-    saveUninitialized: true,
+    // The session middleware below assigns clientId, which causes the session
+    // to be saved. Avoid issuing empty session cookies for every request.
+    saveUninitialized: false,
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      maxAge: 365 * 24 * 60 * 60 * 1000,
+      secure: isProduction,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
     },
   }),
 );
