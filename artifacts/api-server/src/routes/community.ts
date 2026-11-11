@@ -1,127 +1,179 @@
 import { Router, type IRouter } from "express";
+import { randomUUID } from "crypto";
+import { z } from "zod/v4";
 import { db } from "@workspace/db";
 import { communityPosts, postUpvotes, users } from "@workspace/db/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
-import { randomUUID } from "crypto";
 
 const router: IRouter = Router();
+const MODES = ["genius", "coder", "strategist", "oracle"] as const;
 
-// Ensure user exists (upsert anonymous user)
-async function ensureUser(userId: string) {
-  const [existing] = await db.select().from(users).where(eq(users.id, userId));
-  if (!existing) {
-    await db.insert(users).values({ id: userId }).onConflictDoNothing();
-  }
+const shareSchema = z.object({
+  mode: z.enum(MODES),
+  prompt: z.string().trim().min(1).max(500),
+  response: z.string().trim().min(1).max(2_000),
+}).strict();
+
+function getSessionUser(req: Parameters<Parameters<typeof router.get>[1]>[0]): string | null {
+  return req.session?.clientId || null;
 }
 
-// GET /api/community — paginated feed ordered by upvotes then recency
-router.get("/community", async (req, res) => {
+async function ensureUser(userId: string): Promise<void> {
+  await db.insert(users).values({ id: userId }).onConflictDoNothing();
+}
+
+// GET /api/community — paginated public feed with server-derived ownership.
+router.get("/community", async (req, res): Promise<void> => {
+  const ownerId = getSessionUser(req);
+  if (!ownerId) {
+    res.status(401).json({ error: "A valid session is required." });
+    return;
+  }
+
+  const rawLimit = req.query.limit === undefined ? 20 : Number(req.query.limit);
+  const rawOffset = req.query.offset === undefined ? 0 : Number(req.query.offset);
+  if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 50 ||
+      !Number.isInteger(rawOffset) || rawOffset < 0 || rawOffset > 1_000_000) {
+    res.status(400).json({ error: "Invalid pagination parameters." });
+    return;
+  }
+
   try {
-    const limit = Math.min(Number(req.query.limit) || 20, 50);
-    const offset = Number(req.query.offset) || 0;
-
-    const posts = await db
-      .select()
-      .from(communityPosts)
+    const posts = await db.select().from(communityPosts)
       .orderBy(desc(communityPosts.upvoteCount), desc(communityPosts.createdAt))
-      .limit(limit)
-      .offset(offset);
+      .limit(rawLimit)
+      .offset(rawOffset);
 
-    res.json({ data: posts });
-  } catch (err) {
-    logger.error({ err }, "Community feed error");
+    res.json({
+      data: posts.map((post) => ({
+        ...post,
+        isOwn: post.userId === ownerId,
+      })),
+    });
+  } catch (error) {
+    logger.error({ error }, "Community feed error");
     res.status(500).json({ error: "Failed to fetch community posts" });
   }
 });
 
-// POST /api/community — share a conversation
-router.post("/community", async (req, res) => {
+// POST /api/community — share a conversation under the active server session.
+router.post("/community", async (req, res): Promise<void> => {
+  const ownerId = getSessionUser(req);
+  if (!ownerId) {
+    res.status(401).json({ error: "A valid session is required." });
+    return;
+  }
+
+  const parsed = shareSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid post data." });
+    return;
+  }
+
   try {
-    const { userId, mode, prompt, response } = req.body as {
-      userId: string;
-      mode: string;
-      prompt: string;
-      response: string;
-    };
-
-    if (!userId || !mode || !prompt || !response) {
-      res.status(400).json({ error: "userId, mode, prompt, and response are required" });
-      return;
-    }
-
-    await ensureUser(userId);
-
-    const id = randomUUID();
+    await ensureUser(ownerId);
     const [post] = await db.insert(communityPosts).values({
-      id,
-      userId,
-      mode,
-      prompt: prompt.slice(0, 500),
-      response: response.slice(0, 2000),
+      id: randomUUID(),
+      userId: ownerId,
+      mode: parsed.data.mode,
+      prompt: parsed.data.prompt,
+      response: parsed.data.response,
     }).returning();
 
-    res.status(201).json({ data: post });
-  } catch (err) {
-    logger.error({ err }, "Share post error");
+    res.status(201).json({ data: { ...post, isOwn: true } });
+  } catch (error) {
+    logger.error({ error }, "Share post error");
     res.status(500).json({ error: "Failed to share post" });
   }
 });
 
-// POST /api/community/:id/upvote — toggle upvote
-router.post("/community/:id/upvote", async (req, res) => {
+// POST /api/community/:id/upvote — atomically toggle the session user's vote.
+router.post("/community/:id/upvote", async (req, res): Promise<void> => {
+  const ownerId = getSessionUser(req);
+  if (!ownerId) {
+    res.status(401).json({ error: "A valid session is required." });
+    return;
+  }
+
   try {
+    await ensureUser(ownerId);
     const { id } = req.params;
-    const { userId } = req.body as { userId: string };
 
-    if (!userId) { res.status(400).json({ error: "userId required" }); return; }
+    const result = await db.transaction(async (tx) => {
+      const [post] = await tx.select({ id: communityPosts.id })
+        .from(communityPosts).where(eq(communityPosts.id, id));
+      if (!post) return null;
 
-    await ensureUser(userId);
+      const removed = await tx.delete(postUpvotes)
+        .where(and(eq(postUpvotes.postId, id), eq(postUpvotes.userId, ownerId)))
+        .returning({ postId: postUpvotes.postId });
 
-    // Check if already upvoted
-    const [existing] = await db
-      .select()
-      .from(postUpvotes)
-      .where(sql`${postUpvotes.postId} = ${id} AND ${postUpvotes.userId} = ${userId}`);
+      if (removed.length > 0) {
+        await tx.update(communityPosts)
+          .set({ upvoteCount: sql`GREATEST(${communityPosts.upvoteCount} - 1, 0)` })
+          .where(eq(communityPosts.id, id));
+        return { upvoted: false };
+      }
 
-    if (existing) {
-      // Remove upvote
-      await db.delete(postUpvotes).where(
-        sql`${postUpvotes.postId} = ${id} AND ${postUpvotes.userId} = ${userId}`
-      );
-      await db.update(communityPosts)
-        .set({ upvoteCount: sql`GREATEST(${communityPosts.upvoteCount} - 1, 0)` })
-        .where(eq(communityPosts.id, id));
-      res.json({ upvoted: false });
-    } else {
-      // Add upvote
-      await db.insert(postUpvotes).values({ postId: id, userId });
-      await db.update(communityPosts)
-        .set({ upvoteCount: sql`${communityPosts.upvoteCount} + 1` })
-        .where(eq(communityPosts.id, id));
-      res.json({ upvoted: true });
+      const inserted = await tx.insert(postUpvotes)
+        .values({ postId: id, userId: ownerId })
+        .onConflictDoNothing()
+        .returning({ postId: postUpvotes.postId });
+
+      if (inserted.length > 0) {
+        await tx.update(communityPosts)
+          .set({ upvoteCount: sql`${communityPosts.upvoteCount} + 1` })
+          .where(eq(communityPosts.id, id));
+      }
+      return { upvoted: inserted.length > 0 };
+    });
+
+    if (!result) {
+      res.status(404).json({ error: "Post not found." });
+      return;
     }
-  } catch (err) {
-    logger.error({ err }, "Upvote error");
-    res.status(500).json({ error: "Failed to upvote" });
+    res.json(result);
+  } catch (error) {
+    logger.error({ error }, "Upvote error");
+    res.status(500).json({ error: "Failed to update vote" });
   }
 });
 
-// DELETE /api/community/:id — delete own post
-router.delete("/community/:id", async (req, res) => {
+// DELETE /api/community/:id — only the session owner can delete a post.
+router.delete("/community/:id", async (req, res): Promise<void> => {
+  const ownerId = getSessionUser(req);
+  if (!ownerId) {
+    res.status(401).json({ error: "A valid session is required." });
+    return;
+  }
+
   try {
     const { id } = req.params;
-    const { userId } = req.body as { userId: string };
+    const result = await db.transaction(async (tx) => {
+      const [post] = await tx.select({ userId: communityPosts.userId })
+        .from(communityPosts).where(eq(communityPosts.id, id));
+      if (!post) return "missing" as const;
+      if (post.userId !== ownerId) return "forbidden" as const;
 
-    const [post] = await db.select().from(communityPosts).where(eq(communityPosts.id, id));
-    if (!post) { res.status(404).json({ error: "Post not found" }); return; }
-    if (post.userId !== userId) { res.status(403).json({ error: "Not your post" }); return; }
+      await tx.delete(postUpvotes).where(eq(postUpvotes.postId, id));
+      await tx.delete(communityPosts).where(
+        and(eq(communityPosts.id, id), eq(communityPosts.userId, ownerId)),
+      );
+      return "deleted" as const;
+    });
 
-    await db.delete(postUpvotes).where(eq(postUpvotes.postId, id));
-    await db.delete(communityPosts).where(eq(communityPosts.id, id));
+    if (result === "missing") {
+      res.status(404).json({ error: "Post not found." });
+      return;
+    }
+    if (result === "forbidden") {
+      res.status(403).json({ error: "You can only delete your own posts." });
+      return;
+    }
     res.json({ deleted: true });
-  } catch (err) {
-    logger.error({ err }, "Delete post error");
+  } catch (error) {
+    logger.error({ error }, "Delete post error");
     res.status(500).json({ error: "Failed to delete post" });
   }
 });
