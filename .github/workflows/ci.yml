@@ -39,4 +39,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck and build all workspaces
+        env:
+          # Reserved .invalid domain keeps the Expo static build isolated from production.
+          EXPO_PUBLIC_DOMAIN: godmode-ci.invalid
         run: pnpm build
