@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import OpenAI from "openai";
-import { z } from "zod/v4";
+import { z } from "zod";
 import { db } from "@workspace/db";
 import { users } from "@workspace/db/schema";
 import { and, eq, sql } from "drizzle-orm";
