@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import OpenAI from "openai";
-import { z } from "zod";
+import { z } from "zod/v4";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
