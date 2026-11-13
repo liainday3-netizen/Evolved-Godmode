@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
 import OpenAI from "openai";
+import { z } from "zod/v4";
 import { db } from "@workspace/db";
 import { users } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
-import { getUncachableStripeClient } from "../stripeClient";
 
 const router: IRouter = Router();
 
@@ -13,119 +13,122 @@ const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
-const STYLE_ENHANCERS: Record<string, string> = {
+const STYLE_ENHANCERS = {
   token: "crypto token logo, coin art, centered emblem, metallic sheen, vibrant colors, clean edges, transparent-ready, ultra-detailed, professional mint-quality, DeFi aesthetic",
   brand: "professional brand logo, clean vector-style, minimal, bold, memorable, scalable, dark background, premium quality, modern design studio",
-  neon: "neon glow art, cyberpunk aesthetic, dark background, electric light trails, vibrant neon colors, cinematic lighting, ultra high detail, 8K",
-  cinematic: "cinematic poster art, dramatic lighting, epic scale, photorealistic, 8K resolution, movie-quality composition, depth of field, volumetric light",
+  neon: "neon glow art, cyberpunk aesthetic, dark background, electric light trails, vibrant neon colors, cinematic lighting, ultra high detail",
+  cinematic: "cinematic poster art, dramatic lighting, epic scale, photorealistic, cinematic composition, depth of field, volumetric light",
   sacred: "sacred geometry, mystical mandala, golden ratio, intricate patterns, glowing lines, cosmic background, ultra-detailed, spiritual art",
-  abstract: "abstract digital art, generative art, bold geometric forms, vibrant palette, studio lighting, award-winning, trending on ArtStation",
+  abstract: "abstract digital art, generative art, bold geometric forms, vibrant palette, studio lighting, detailed digital artwork",
   portrait: "portrait photography, dramatic studio lighting, shallow depth of field, ultra sharp, photorealistic, professional retouching, cinematic color grade",
-  icon: "app icon design, flat design, bold colors, crisp edges, high contrast, pixel-perfect, professional UI asset, 1024x1024",
-};
+  icon: "app icon design, flat design, bold colors, crisp edges, high contrast, professional UI asset, square composition",
+} as const;
 
-const BASE_QUALITY = "masterpiece, best quality, ultra-detailed, sharp focus, professional";
+const BASE_QUALITY = "high quality, detailed, sharp focus, professional";
 const FREE_DAILY_IMAGE_LIMIT = 2;
+const VALID_SIZES = ["1024x1024", "1536x1024", "1024x1536"] as const;
 
-async function checkIsPro(userId: string): Promise<boolean> {
-  try {
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
-    if (!user?.stripeCustomerId) return false;
-    const stripe = await getUncachableStripeClient();
-    const subs = await stripe.subscriptions.list({
-      customer: user.stripeCustomerId,
-      status: "active",
-      limit: 1,
-    });
-    if (subs.data.length > 0) return true;
-    const trialing = await stripe.subscriptions.list({
-      customer: user.stripeCustomerId,
-      status: "trialing",
-      limit: 1,
-    });
-    return trialing.data.length > 0;
-  } catch {
-    return false;
-  }
+const generateSchema = z.object({
+  prompt: z.string().trim().min(2).max(4_000),
+  style: z.enum(["token", "brand", "neon", "cinematic", "sacred", "abstract", "portrait", "icon"]).default("brand"),
+  size: z.enum(VALID_SIZES).default("1024x1024"),
+}).strict();
+
+async function checkAndIncrementImageUsage(ownerId: string): Promise<{ allowed: boolean; remaining: number }> {
+  const today = new Date().toISOString().slice(0, 10);
+
+  await db.insert(users)
+    .values({ id: ownerId, dailyImageCount: 0, lastImageDate: null })
+    .onConflictDoNothing();
+
+  const updated = await db.update(users)
+    .set({
+      dailyImageCount: sql`CASE
+        WHEN ${users.lastImageDate} = ${today}::date
+        THEN ${users.dailyImageCount} + 1
+        ELSE 1
+      END`,
+      lastImageDate: today,
+    })
+    .where(and(
+      eq(users.id, ownerId),
+      sql`(
+        ${users.lastImageDate} IS DISTINCT FROM ${today}::date
+        OR ${users.dailyImageCount} < ${FREE_DAILY_IMAGE_LIMIT}
+      )`,
+    ))
+    .returning({ dailyImageCount: users.dailyImageCount });
+
+  if (updated.length === 0) return { allowed: false, remaining: 0 };
+  return {
+    allowed: true,
+    remaining: Math.max(0, FREE_DAILY_IMAGE_LIMIT - updated[0].dailyImageCount),
+  };
 }
 
-async function checkAndIncrementImageUsage(userId: string): Promise<{ allowed: boolean; remaining: number }> {
-  const today = new Date().toISOString().split("T")[0];
-
-  await db.insert(users).values({ id: userId, dailyImageCount: 0, lastImageDate: null }).onConflictDoNothing();
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  if (!user) return { allowed: true, remaining: FREE_DAILY_IMAGE_LIMIT };
-
-  const isNewDay = !user.lastImageDate || user.lastImageDate !== today;
-  const currentCount = isNewDay ? 0 : (user.dailyImageCount ?? 0);
-
-  if (currentCount >= FREE_DAILY_IMAGE_LIMIT) {
-    return { allowed: false, remaining: 0 };
+router.post("/studio/generate", async (req, res): Promise<void> => {
+  const ownerId = req.session?.clientId;
+  if (!ownerId) {
+    res.status(401).json({ error: "A valid session is required." });
+    return;
   }
 
-  await db.update(users).set({
-    dailyImageCount: currentCount + 1,
-    lastImageDate: today,
-  }).where(eq(users.id, userId));
+  const parsed = generateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: "Invalid image request.",
+      details: parsed.error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        message: issue.message,
+      })),
+    });
+    return;
+  }
 
-  return { allowed: true, remaining: FREE_DAILY_IMAGE_LIMIT - currentCount - 1 };
-}
-
-router.post("/studio/generate", async (req, res) => {
+  let remaining: number;
   try {
-    const { prompt, style = "brand", size = "1024x1024", userId } = req.body as {
-      prompt: string;
-      style?: string;
-      size?: string;
-      userId?: string;
-    };
-
-    if (!prompt || prompt.trim().length < 2) {
-      res.status(400).json({ error: "Prompt is required" });
+    const usage = await checkAndIncrementImageUsage(ownerId);
+    if (!usage.allowed) {
+      res.status(429).json({
+        error: "Daily image limit reached. You can try again tomorrow.",
+        limitReached: true,
+        remaining: 0,
+      });
       return;
     }
+    remaining = usage.remaining;
+  } catch (error) {
+    logger.error({ error }, "Image quota check failed");
+    res.status(503).json({ error: "Image generation is temporarily unavailable. Please try again shortly." });
+    return;
+  }
 
-    // Rate limit free users
-    if (userId) {
-      const isPro = await checkIsPro(userId);
-      if (!isPro) {
-        const { allowed, remaining } = await checkAndIncrementImageUsage(userId);
-        if (!allowed) {
-          res.status(402).json({
-            error: `Free plan limit reached — 2 images per day. Upgrade to Pro for unlimited generations.`,
-            limitReached: true,
-            remaining: 0,
-          });
-          return;
-        }
-        res.setHeader("X-Images-Remaining", String(remaining));
-      }
-    }
+  const { prompt, style, size } = parsed.data;
+  const fullPrompt = `${prompt}, ${STYLE_ENHANCERS[style]}, ${BASE_QUALITY}`;
 
-    const styleEnhancer = STYLE_ENHANCERS[style] ?? STYLE_ENHANCERS.brand;
-    const fullPrompt = `${prompt.trim()}, ${styleEnhancer}, ${BASE_QUALITY}`;
-
-    const validSizes = ["1024x1024", "1792x1024", "1024x1792"] as const;
-    const imageSize = validSizes.includes(size as any)
-      ? (size as "1024x1024" | "1792x1024" | "1024x1792")
-      : "1024x1024";
-
+  try {
     const response = await openai.images.generate({
       model: "gpt-image-1",
       prompt: fullPrompt,
       n: 1,
-      size: imageSize,
+      size,
     });
 
     const imageData = response.data?.[0];
+    if (!imageData?.b64_json && !imageData?.url) {
+      res.status(502).json({ error: "The image service returned no image. Please try again." });
+      return;
+    }
+
+    res.setHeader("X-Images-Remaining", String(remaining));
     res.json({
-      b64_json: imageData?.b64_json ?? null,
-      url: imageData?.url ?? null,
+      b64_json: imageData.b64_json ?? null,
+      url: imageData.url ?? null,
       enhancedPrompt: fullPrompt,
     });
-  } catch (err: any) {
-    logger.error({ err }, "Studio image generation failed");
-    res.status(500).json({ error: err.message ?? "Image generation failed" });
+  } catch (error) {
+    logger.error({ error }, "Studio image generation failed");
+    res.status(502).json({ error: "Image generation failed. Please try again shortly." });
   }
 });
 
