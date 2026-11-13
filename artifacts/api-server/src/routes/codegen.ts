@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import OpenAI from "openai";
 import { randomUUID } from "crypto";
 import { and, desc, eq, ilike, or } from "drizzle-orm";
-import { z } from "zod/v4";
+import { z } from "zod";
 import { db } from "@workspace/db";
 import { codingAttempts } from "@workspace/db/schema";
 import { logger } from "../lib/logger";
