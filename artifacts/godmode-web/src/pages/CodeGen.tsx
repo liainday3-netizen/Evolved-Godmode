@@ -121,7 +121,7 @@ export default function CodeGen() {
       if (!response.ok) throw new Error("Feedback could not be saved");
       setFeedbackSaved(true);
     } catch {
-      setOutput((current) => current + "\\n// Feedback could not be saved. Try again later.");
+      setOutput((current) => current + "\n// Feedback could not be saved. Try again later.");
     }
   };
 
