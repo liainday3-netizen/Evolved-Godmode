@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "crypto";
-import { z } from "zod/v4";
+import { z } from "zod";
 import { db } from "@workspace/db";
 import { communityPosts, postUpvotes, users } from "@workspace/db/schema";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
