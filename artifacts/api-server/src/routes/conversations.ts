@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { Router, type IRouter, type Response } from "express";
-import { z } from "zod/v4";
+import { z } from "zod";
 import { db } from "@workspace/db";
 import { conversations, messages } from "@workspace/db";
 import { eq, desc, asc, and } from "drizzle-orm";
