@@ -177,7 +177,7 @@ overrides:
   "brace-expansion@1": "1.1.18"
   "brace-expansion@2": "2.1.4"
   "brace-expansion@5": "5.0.9"
-  image-size: 2.0.4
+  image-size: "npm:image-size-next@1.2.2"
   browserslist: "4.28.8"
   decode-uri-component: "0.5.0"
   node-forge: "1.4.0"
