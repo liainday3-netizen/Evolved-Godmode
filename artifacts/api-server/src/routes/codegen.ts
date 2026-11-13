@@ -177,6 +177,23 @@ ${memoryContext}`;
   }
 });
 
+router.delete("/codegen/memory", async (req, res): Promise<void> => {
+  const ownerId = req.session?.clientId;
+  if (!ownerId) {
+    res.status(401).json({ error: "A valid session is required." });
+    return;
+  }
+  try {
+    const deleted = await db.delete(codingAttempts)
+      .where(eq(codingAttempts.ownerId, ownerId))
+      .returning({ id: codingAttempts.id });
+    res.json({ deleted: deleted.length });
+  } catch (error) {
+    req.log.error({ error }, "Coding memory deletion failed");
+    res.status(503).json({ error: "Coding memory is temporarily unavailable." });
+  }
+});
+
 router.post("/codegen/:attemptId/feedback", async (req, res): Promise<void> => {
   const ownerId = req.session?.clientId;
   if (!ownerId) {
