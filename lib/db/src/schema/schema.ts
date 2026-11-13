@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, bigint, timestamp, date, primaryKey, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, bigint, timestamp, date, primaryKey, index, check } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -45,8 +45,9 @@ export const codingAttempts = pgTable("coding_attempts", {
   errorSummary: text("error_summary"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
-  ownerCreatedIdx: index("coding_attempts_owner_created_idx").on(t.ownerId, t.createdAt),
+  ownerCreatedIdx: index("coding_attempts_owner_created_idx").on(t.ownerId, t.createdAt.desc()),
   ownerOutcomeIdx: index("coding_attempts_owner_outcome_idx").on(t.ownerId, t.outcome),
+  outcomeCheck: check("coding_attempts_outcome_check", sql`${t.outcome} IN ('unrated', 'success', 'failure')`),
 }));
 
 export type CodingAttempt = typeof codingAttempts.$inferSelect;
