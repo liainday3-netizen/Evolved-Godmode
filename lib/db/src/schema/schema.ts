@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, bigint, timestamp, date, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, bigint, timestamp, date, primaryKey, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -32,6 +32,24 @@ export const postUpvotes = pgTable("post_upvotes", {
   pk: primaryKey({ columns: [t.postId, t.userId] }),
 }));
 
+// Private coding memory: successful and unsuccessful attempts stay scoped to the
+// server-issued session owner. Retrieval never crosses users or sessions.
+export const codingAttempts = pgTable("coding_attempts", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  task: text("task").notNull(),
+  language: text("language").notNull(),
+  generatedCode: text("generated_code").notNull(),
+  outcome: text("outcome").notNull().default("unrated"),
+  feedback: text("feedback"),
+  errorSummary: text("error_summary"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  ownerCreatedIdx: index("coding_attempts_owner_created_idx").on(t.ownerId, t.createdAt),
+  ownerOutcomeIdx: index("coding_attempts_owner_outcome_idx").on(t.ownerId, t.outcome),
+}));
+
+export type CodingAttempt = typeof codingAttempts.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type CommunityPost = typeof communityPosts.$inferSelect;
