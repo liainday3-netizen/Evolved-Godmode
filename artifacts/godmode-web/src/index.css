@@ -98,3 +98,25 @@ select:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Code Generator adapts its split workspace to narrow phone screens. */
+@media (max-width: 760px) {
+  .codegen-panels {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(420px, 1fr) minmax(320px, 1fr);
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .codegen-input-panel,
+  .codegen-output-panel {
+    min-width: 0;
+    min-height: 320px;
+  }
+
+  .codegen-input-panel {
+    border-right: 0 !important;
+    border-bottom: 1px solid #252536;
+  }
+}
