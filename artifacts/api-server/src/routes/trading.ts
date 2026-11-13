@@ -189,7 +189,7 @@ router.post("/trading/generate", async (req, res): Promise<void> => {
       res.status(400).json({ error: `Invalid option for ${param.label}.` });
       return;
     } else if (param.type === "text" && param.key === "pair" &&
-      !/^[A-Za-z0-9]{2,15}\\/[A-Za-z0-9]{2,15}$/.test(value)) {
+      !/^[A-Za-z0-9]{2,15}\/[A-Za-z0-9]{2,15}$/.test(value)) {
       res.status(400).json({ error: "Trading pair must use a format such as BTC/USDT." });
       return;
     }
