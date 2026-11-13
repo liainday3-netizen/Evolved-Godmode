@@ -168,7 +168,7 @@ overrides:
   brace-expansion@1: 1.1.18
   brace-expansion@2: 2.1.4
   brace-expansion@5: 5.0.9
-  image-size: 2.0.4
+  image-size: npm:image-size-next@1.2.2
   browserslist: 4.28.8
   decode-uri-component: 0.5.0
   node-forge: 1.4.0
@@ -4198,9 +4198,9 @@ packages:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
 
-  image-size@2.0.4:
-    resolution: {integrity: sha512-QRUkFFsRV/6fuESxb9Vkq+a0LkSrgKXuc2NEqfikiXxxN/G3tjWt5EVUlMaImRBZRZK/jRBEbYvpPYZL8t08Zw==}
-    engines: {node: '>=18'}
+  image-size-next@1.2.2:
+    resolution: {integrity: sha512-Pd3CJ2+Ifk2H2jWikkoz2BSZgnuF3Qsea4gQmj2gtiOtYpGWBl7elj8EXnFMiY5PaYNruTTLD0hQ0UWK7pz9xA==}
+    engines: {node: '>=16.x'}
     hasBin: true
 
   imurmurhash@0.1.4:
@@ -10442,7 +10442,9 @@ snapshots:
 
   ignore@5.3.2: {}
 
-  image-size@2.0.4: {}
+  image-size-next@1.2.2:
+    dependencies:
+      queue: 6.0.2
 
   imurmurhash@0.1.4: {}
 
@@ -11200,7 +11202,7 @@ snapshots:
       flow-enums-runtime: 0.0.6
       graceful-fs: 4.2.11
       hermes-parser: 0.32.0
-      image-size: 2.0.4
+      image-size: image-size-next@1.2.2
       invariant: 2.2.4
       jest-worker: 29.7.0
       jsc-safe-url: 0.2.4
@@ -11246,7 +11248,7 @@ snapshots:
       flow-enums-runtime: 0.0.6
       graceful-fs: 4.2.11
       hermes-parser: 0.35.0
-      image-size: 2.0.4
+      image-size: image-size-next@1.2.2
       invariant: 2.2.4
       jest-worker: 29.7.0
       jsc-safe-url: 0.2.4
