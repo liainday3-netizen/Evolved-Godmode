@@ -21,8 +21,8 @@ const STYLES = [
 
 const SIZES = [
   { id: "1024x1024",  label: "Square",    sub: "1:1",   icon: "▣" },
-  { id: "1792x1024",  label: "Wide",      sub: "16:9",  icon: "▬" },
-  { id: "1024x1792",  label: "Tall",      sub: "9:16",  icon: "▮" },
+  { id: "1536x1024",  label: "Wide",      sub: "3:2",  icon: "▬" },
+  { id: "1024x1536",  label: "Tall",      sub: "2:3",  icon: "▮" },
 ];
 
 const PROMPT_STARTERS: Record<string, string[]> = {
@@ -76,11 +76,11 @@ export default function ImageStudio() {
     setSelected(null);
     setError("");
     try {
-      const userId = (await import("@/lib/user")).getUserId();
       const res = await fetch(`${base}/api/studio/generate`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: p, style, size, userId }),
+        body: JSON.stringify({ prompt: p, style, size }),
       });
       const data = await res.json() as { b64_json?: string; url?: string; enhancedPrompt?: string; error?: string; limitReached?: boolean };
       if (res.status === 402 || data.limitReached) {
@@ -115,8 +115,8 @@ export default function ImageStudio() {
 
   const sizeObj = SIZES.find(s => s.id === size) ?? SIZES[0];
   const imgStyle: React.CSSProperties =
-    size === "1792x1024" ? { width: "100%", aspectRatio: "16/9" }
-    : size === "1024x1792" ? { width: "min(320px, 100%)", aspectRatio: "9/16", margin: "0 auto" }
+    size === "1536x1024" ? { width: "100%", aspectRatio: "3/2" }
+    : size === "1024x1536" ? { width: "min(320px, 100%)", aspectRatio: "2/3", margin: "0 auto" }
     : { width: "min(480px, 100%)", aspectRatio: "1/1", margin: "0 auto" };
 
   return (
