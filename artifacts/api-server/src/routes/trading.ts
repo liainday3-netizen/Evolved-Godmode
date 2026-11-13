@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import OpenAI from "openai";
+import { z } from "zod/v4";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -149,49 +150,98 @@ router.get("/trading/templates", (_req, res): void => {
   res.json({ templates: TEMPLATES });
 });
 
-router.post("/trading/generate", async (req, res): Promise<void> => {
-  try {
-    const { templateId, config, language = "python" } = req.body as {
-      templateId: string;
-      config: Record<string, string>;
-      language?: string;
-    };
+const generateSchema = z.object({
+  templateId: z.enum(["dca", "scalping", "grid", "trend", "mean_reversion", "arbitrage"]),
+  language: z.enum(["python", "javascript"]).default("python"),
+  config: z.record(z.string(), z.string().max(100)).default({}),
+}).strict();
 
-    const template = TEMPLATES.find((t) => t.id === templateId);
-    if (!template) {
-      res.status(400).json({ error: "Unknown template" });
+router.post("/trading/generate", async (req, res): Promise<void> => {
+  const parsed = generateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid trading bot configuration." });
+    return;
+  }
+
+  const { templateId, language, config } = parsed.data;
+  const template = TEMPLATES.find((item) => item.id === templateId);
+  if (!template) {
+    res.status(400).json({ error: "Unknown template." });
+    return;
+  }
+
+  const allowedKeys = new Set(template.params.map((param) => param.key));
+  if (Object.keys(config).some((key) => !allowedKeys.has(key))) {
+    res.status(400).json({ error: "Configuration contains unsupported fields." });
+    return;
+  }
+
+  for (const param of template.params) {
+    const value = config[param.key];
+    if (value === undefined) continue;
+    if (param.type === "number") {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 1_000_000_000) {
+        res.status(400).json({ error: `Invalid value for ${param.label}.` });
+        return;
+      }
+    } else if (param.type === "select" && !param.options?.includes(value)) {
+      res.status(400).json({ error: `Invalid option for ${param.label}.` });
+      return;
+    } else if (param.type === "text" && param.key === "pair" &&
+      !/^[A-Za-z0-9]{2,15}\\/[A-Za-z0-9]{2,15}$/.test(value)) {
+      res.status(400).json({ error: "Trading pair must use a format such as BTC/USDT." });
       return;
     }
+  }
 
-    const configStr = Object.entries(config)
-      .map(([k, v]) => `  ${k}: ${v}`)
-      .join("\n");
+  if (templateId === "arbitrage" && config.exchange_a && config.exchange_b &&
+      config.exchange_a === config.exchange_b) {
+    res.status(400).json({ error: "Choose two different exchanges for arbitrage." });
+    return;
+  }
+  if (templateId === "grid" && config.lower_price && config.upper_price &&
+      Number(config.lower_price) >= Number(config.upper_price)) {
+    res.status(400).json({ error: "Grid lower price must be below upper price." });
+    return;
+  }
 
-    const systemPrompt = `You are GODMODE Trading Bot Engineer — an elite quantitative developer and algorithmic trading expert. You write production-quality crypto trading bot code in ${language} that is clean, commented, and ready to deploy.
+  const configStr = Object.entries(config)
+    .map(([key, value]) => `  ${key}: ${value}`)
+    .join("\\n");
 
-Rules:
-- Output ONLY the ${language} code, no prose before or after
-- Include all necessary imports (ccxt for exchange connectivity is standard)
-- Add clear comments explaining strategy logic at each key step
-- Include proper error handling, logging, and graceful shutdown
-- Include a main entry point / run loop
-- Make configuration values easy to find at the top of the file
-- Write complete, runnable code`;
+  const systemPrompt = `You are GODMODE Trading Bot Engineer — an expert quantitative developer. Generate carefully documented ${language} educational trading-bot code.
 
-    const userPrompt = `Generate a complete ${template.name} trading bot in ${language}.
+Mandatory safety rules:
+- PAPER TRADING ONLY. The generated program must default to simulated orders and must not submit live orders.
+- Do not request, embed, print, or hard-code API keys, secrets, passwords, or wallet credentials.
+- Never describe any strategy as guaranteed, risk-free, or production-ready.
+- Explain fees, slippage, liquidity, exchange outages, and loss risk in code comments.
+- Include conservative risk limits, position sizing checks, logging, error handling, and graceful shutdown.
+- Keep all configuration values easy to find at the top of the file.
+- Output only the complete ${language} code in one fenced code block.`;
+
+  const userPrompt = `Create a PAPER-TRADING educational implementation of the ${template.name}.
 
 Strategy: ${template.description}
 
-Configuration from user:
+Configuration:
 ${configStr}
 
-Target exchange: ${config.exchange || template.exchanges[0]}
+Preferred exchange for illustrative market data: ${config.exchange || template.exchanges[0]}
 Category: ${template.category}
-Risk level: ${template.risk}
+Risk classification: ${template.risk}
 
-Generate the complete, production-ready ${language} bot code now.`;
+Include a clear notice that simulated results do not predict live results. Do not enable live trading.`;
 
-    res.setHeader("Content-Type", "text/event-stream");
+  const abortController = new AbortController();
+  let finished = false;
+  res.on("close", () => {
+    if (!finished) abortController.abort();
+  });
+
+  try {
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders();
@@ -204,26 +254,32 @@ Generate the complete, production-ready ${language} bot code now.`;
       ],
       stream: true,
       max_completion_tokens: 8192,
-    });
+    }, { signal: abortController.signal });
 
     for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || "";
-      if (content) {
-        res.write(`data: ${JSON.stringify({ content })}\n\n`);
-      }
+      if (res.destroyed || abortController.signal.aborted) break;
+      const output = chunk.choices[0]?.delta?.content || "";
+      if (output) res.write(`data: ${JSON.stringify({ content: output })}\\n\\n`);
     }
 
-    res.write("data: [DONE]\n\n");
-    res.end();
-  } catch (error) {
-    logger.error({ error }, "Trading bot generate error");
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Failed to generate bot" });
-    } else {
-      res.write(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`);
+    if (!res.destroyed && !abortController.signal.aborted) {
+      res.write("data: [DONE]\\n\\n");
       res.end();
     }
+    finished = true;
+  } catch (error) {
+    if (abortController.signal.aborted || res.destroyed) {
+      finished = true;
+      return;
+    }
+    logger.error({ error }, "Trading bot generate error");
+    if (!res.headersSent) {
+      res.status(502).json({ error: "Failed to generate trading code." });
+    } else if (!res.destroyed) {
+      res.write(`data: ${JSON.stringify({ error: "The code generation stream was interrupted." })}\\n\\n`);
+      res.end();
+    }
+    finished = true;
   }
 });
-
 export default router;
