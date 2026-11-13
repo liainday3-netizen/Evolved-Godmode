@@ -35,6 +35,8 @@ export default function CodeGen() {
   const [copied, setCopied] = useState(false);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [feedbackSaved, setFeedbackSaved] = useState(false);
+  const [memoryClearing, setMemoryClearing] = useState(false);
+  const [memoryNotice, setMemoryNotice] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
@@ -109,6 +111,25 @@ export default function CodeGen() {
 
   const handleStop = () => { abortRef.current?.abort(); };
 
+  const clearCodingMemory = async () => {
+    if (memoryClearing || !window.confirm("Delete all saved coding history for this browser session? This cannot be undone.")) return;
+    setMemoryClearing(true);
+    setMemoryNotice("");
+    try {
+      const response = await fetch("/api/codegen/memory", {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Memory could not be cleared");
+      const result = await response.json() as { deleted?: number };
+      setMemoryNotice(`Cleared ${result.deleted ?? 0} saved attempts.`);
+    } catch {
+      setMemoryNotice("Coding memory could not be cleared. Please try again.");
+    } finally {
+      setMemoryClearing(false);
+    }
+  };
+
   const sendFeedback = async (outcome: "success" | "failure") => {
     if (!attemptId || feedbackSaved) return;
     try {
@@ -159,14 +180,23 @@ export default function CodeGen() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {memoryNotice && <span role="status" style={{ fontSize: 10, color: Colors.textMuted }}>{memoryNotice}</span>}
+            <button
+              onClick={clearCodingMemory}
+              disabled={memoryClearing}
+              title="Delete saved coding history for this session"
+              style={{ background: "none", border: `1px solid ${Colors.border}`, borderRadius: 8, color: Colors.textMuted, padding: "6px 9px", fontSize: 11, cursor: memoryClearing ? "wait" : "pointer", fontFamily: "inherit" }}
+            >
+              {memoryClearing ? "Clearing…" : "Clear memory"}
+            </button>
             <span style={{ fontSize: 11, color: Colors.textMuted, fontStyle: "italic" }}>⌘+Enter to generate</span>
           </div>
         </div>
 
         {/* Body: prompt left / output right */}
-        <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1.4fr", overflow: "hidden" }}>
+        <div className="codegen-panels" style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1.4fr", overflow: "hidden" }}>
           {/* Left panel — input */}
-          <div style={{ display: "flex", flexDirection: "column", borderRight: `1px solid ${Colors.border}`, overflow: "hidden" }}>
+          <div className="codegen-input-panel" style={{ display: "flex", flexDirection: "column", borderRight: `1px solid ${Colors.border}`, overflow: "hidden" }}>
             {/* Language selector */}
             <div style={{ padding: "16px 20px 12px", borderBottom: `1px solid ${Colors.border}`, flexShrink: 0 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: Colors.textMuted, letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Language</div>
@@ -225,7 +255,7 @@ export default function CodeGen() {
           </div>
 
           {/* Right panel — output */}
-          <div style={{ display: "flex", flexDirection: "column", overflow: "hidden", backgroundColor: "#0a0a0f" }}>
+          <div className="codegen-output-panel" style={{ display: "flex", flexDirection: "column", overflow: "hidden", backgroundColor: "#0a0a0f" }}>
             {/* Output header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px", borderBottom: `1px solid ${Colors.border}`, flexShrink: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
