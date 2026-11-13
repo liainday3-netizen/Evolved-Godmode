@@ -66,6 +66,17 @@ async function checkAndIncrementImageUsage(ownerId: string): Promise<{ allowed: 
   };
 }
 
+async function refundImageUsage(ownerId: string): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  await db.update(users)
+    .set({ dailyImageCount: sql`GREATEST(${users.dailyImageCount} - 1, 0)` })
+    .where(and(
+      eq(users.id, ownerId),
+      sql`${users.lastImageDate} = ${today}::date`,
+      sql`${users.dailyImageCount} > 0`,
+    ));
+}
+
 router.post("/studio/generate", async (req, res): Promise<void> => {
   const ownerId = req.session?.clientId;
   if (!ownerId) {
@@ -116,6 +127,7 @@ router.post("/studio/generate", async (req, res): Promise<void> => {
 
     const imageData = response.data?.[0];
     if (!imageData?.b64_json && !imageData?.url) {
+      await refundImageUsage(ownerId).catch((refundError) => logger.error({ refundError }, "Image quota refund failed"));
       res.status(502).json({ error: "The image service returned no image. Please try again." });
       return;
     }
@@ -128,6 +140,7 @@ router.post("/studio/generate", async (req, res): Promise<void> => {
     });
   } catch (error) {
     logger.error({ error }, "Studio image generation failed");
+    await refundImageUsage(ownerId).catch((refundError) => logger.error({ refundError }, "Image quota refund failed"));
     res.status(502).json({ error: "Image generation failed. Please try again shortly." });
   }
 });
