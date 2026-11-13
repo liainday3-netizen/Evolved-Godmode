@@ -33,6 +33,8 @@ export default function CodeGen() {
   const [output, setOutput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [feedbackSaved, setFeedbackSaved] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
@@ -48,12 +50,15 @@ export default function CodeGen() {
     setStreaming(true);
     setOutput("");
     setCopied(false);
+    setAttemptId(null);
+    setFeedbackSaved(false);
     abortRef.current = new AbortController();
 
     try {
       const response = await fetch("/api/codegen", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ prompt: text, language }),
         signal: abortRef.current.signal,
       });
@@ -78,13 +83,17 @@ export default function CodeGen() {
             const data = line.slice(6).trim();
             if (data === "[DONE]") { reader.cancel(); break; }
             try {
-              const parsed = JSON.parse(data) as { content?: string; error?: string };
+              const parsed = JSON.parse(data) as { content?: string; error?: string; done?: boolean; attemptId?: string };
+              if (parsed.error) throw new Error(parsed.error);
+              if (parsed.attemptId) setAttemptId(parsed.attemptId);
               if (parsed.content) {
                 full += parsed.content;
                 setOutput(full);
                 outputRef.current?.scrollTo({ top: outputRef.current.scrollHeight });
               }
-            } catch { /* ignore */ }
+            } catch (err) {
+              if (err instanceof Error && err.message !== "Unexpected end of JSON input") throw err;
+            }
           }
         }
       }
@@ -99,6 +108,22 @@ export default function CodeGen() {
   }, [prompt, language, streaming]);
 
   const handleStop = () => { abortRef.current?.abort(); };
+
+  const sendFeedback = async (outcome: "success" | "failure") => {
+    if (!attemptId || feedbackSaved) return;
+    try {
+      const response = await fetch(`/api/codegen/${attemptId}/feedback`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outcome }),
+      });
+      if (!response.ok) throw new Error("Feedback could not be saved");
+      setFeedbackSaved(true);
+    } catch {
+      setOutput((current) => current + "\\n// Feedback could not be saved. Try again later.");
+    }
+  };
 
   const handleCopy = async () => {
     const code = extractCode(output);
@@ -214,12 +239,20 @@ export default function CodeGen() {
                 </span>
               </div>
               {displayCode && (
-                <button
-                  onClick={handleCopy}
-                  style={{ background: "none", border: `1px solid ${Colors.border}`, color: copied ? "#00FFCC" : Colors.textMuted, fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}
-                >
-                  {copied ? "✓ Copied" : "Copy"}
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button
+                    onClick={handleCopy}
+                    style={{ background: "none", border: `1px solid ${Colors.border}`, color: copied ? "#00FFCC" : Colors.textMuted, fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}
+                  >
+                    {copied ? "✓ Copied" : "Copy"}
+                  </button>
+                  {attemptId && (
+                    <>
+                      <button onClick={() => sendFeedback("success")} disabled={feedbackSaved} aria-label="Mark code as successful" style={{ background: "none", border: `1px solid ${Colors.border}`, color: feedbackSaved ? "#00FFCC" : Colors.textMuted, borderRadius: 8, padding: "5px 9px", cursor: feedbackSaved ? "default" : "pointer" }}>✓</button>
+                      <button onClick={() => sendFeedback("failure")} disabled={feedbackSaved} aria-label="Mark code as unsuccessful" style={{ background: "none", border: `1px solid ${Colors.border}`, color: Colors.textMuted, borderRadius: 8, padding: "5px 9px", cursor: feedbackSaved ? "default" : "pointer" }}>✕</button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
 
