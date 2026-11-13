@@ -43,3 +43,14 @@ jobs:
           # Reserved .invalid domain keeps the Expo static build isolated from production.
           EXPO_PUBLIC_DOMAIN: godmode-ci.invalid
         run: pnpm build
+
+      - name: Package complete V2 source
+        run: git archive --format=zip --output=godmode-v2-source.zip HEAD
+
+      - name: Upload V2 source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: evolved-godmode-v2-source
+          path: godmode-v2-source.zip
+          if-no-files-found: error
+          retention-days: 14
